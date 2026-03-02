@@ -142,10 +142,8 @@ Racional: hace inclusivo el corte temporal, evita dejar “zombies” terminales
 | QA-20260302-BLOCKER-USB | P0 (infra) | OPEN | No hay dispositivo visible en `adb`; bloquea QA físico USB end-to-end. |
 
 ## 8) Commits
-- Pendiente en esta ejecución: 1 cambio de código + este reporte.
-- Se recomienda commit por tema:
-  1. fix(android): make terminal transaction cleanup inclusive at cutoff
-  2. docs(qa): add physical-device QA report 2026-03-02
+- `800b8ec` - `fix(android): make terminal transaction cleanup inclusive at cutoff`
+- `29db1ae` - `docs(qa): add physical-device QA report for 2026-03-02`
 
 ## 9) Próximo paso operativo para cerrar QA físico
 1. Conectar teléfono por USB y autorizar huella RSA (`adb devices -l` debe mostrar estado `device`).
