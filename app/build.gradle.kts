@@ -7,6 +7,38 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+fun String.toBuildConfigString(): String =
+    "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
+fun readConfig(
+    propertyName: String,
+    envName: String,
+    defaultValue: String,
+): String {
+    val envValue = System.getenv(envName)
+    return providers.gradleProperty(propertyName).orElse(envValue ?: defaultValue).get()
+}
+
+val devApiBaseUrl = readConfig(
+    propertyName = "LCX_DEV_API_BASE_URL",
+    envName = "LCX_DEV_API_BASE_URL",
+    defaultValue = "http://10.0.2.2:3000",
+)
+val devSupabaseUrl = readConfig(
+    propertyName = "LCX_DEV_SUPABASE_URL",
+    envName = "LCX_DEV_SUPABASE_URL",
+    defaultValue = "http://10.0.2.2:54321",
+)
+val devSupabaseAnonKey = readConfig(
+    propertyName = "LCX_DEV_SUPABASE_ANON_KEY",
+    envName = "LCX_DEV_SUPABASE_ANON_KEY",
+    defaultValue = readConfig(
+        propertyName = "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+        envName = "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+        defaultValue = "dev-anon-key",
+    ),
+)
+
 android {
     namespace = "com.cleanx.lcx"
     compileSdk = 36
@@ -31,9 +63,9 @@ android {
             dimension = "environment"
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000\"")
-            buildConfigField("String", "SUPABASE_URL", "\"http://10.0.2.2:54321\"")
-            buildConfigField("String", "SUPABASE_ANON_KEY", "\"dev-anon-key\"")
+            buildConfigField("String", "API_BASE_URL", devApiBaseUrl.toBuildConfigString())
+            buildConfigField("String", "SUPABASE_URL", devSupabaseUrl.toBuildConfigString())
+            buildConfigField("String", "SUPABASE_ANON_KEY", devSupabaseAnonKey.toBuildConfigString())
             buildConfigField("Boolean", "USE_REAL_ZETTLE", "false")
             buildConfigField("Boolean", "USE_REAL_BROTHER", "false")
         }
