@@ -28,7 +28,7 @@ interface TransactionDao {
         """
         DELETE FROM active_transactions
         WHERE phase IN ('COMPLETED', 'CANCELLED')
-        AND updatedAt < :olderThan
+        AND updatedAt <= :olderThan
         """
     )
     suspend fun cleanupOldRecords(olderThan: Long)
