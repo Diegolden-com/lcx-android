@@ -9,6 +9,7 @@ import com.cleanx.lcx.feature.cash.data.CashMovementMetadata
 import com.cleanx.lcx.feature.cash.data.CashMovementRow
 import com.cleanx.lcx.feature.cash.data.CashRepository
 import com.cleanx.lcx.feature.cash.data.CashSummary
+import com.cleanx.lcx.feature.cash.data.CashValidation
 import com.cleanx.lcx.feature.cash.data.DenominationBreakdown
 import com.cleanx.lcx.feature.cash.data.MovementType
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -64,8 +65,12 @@ data class CashUiState(
     val expectedClosingFromSales: Double?
         get() {
             if (selectedType != MovementType.CLOSING || parsedTotalSalesForDay == null) return null
-            return summary.openingAmount + (parsedTotalSalesForDay ?: 0.0) +
-                summary.totalIncome - summary.totalExpenses
+            return CashValidation.calculateExpectedClosing(
+                openingAmount = summary.openingAmount,
+                totalSalesForDay = parsedTotalSalesForDay ?: 0.0,
+                totalIncome = summary.totalIncome,
+                totalExpenses = summary.totalExpenses,
+            )
         }
 
     val discrepancyPreview: Double?
@@ -215,31 +220,17 @@ class CashViewModel @Inject constructor(
     fun submit() {
         val state = _uiState.value
 
-        // Validation
-        if (state.selectedType == MovementType.EXPENSE && state.notes.isBlank()) {
-            _uiState.update {
-                it.copy(submitError = "Por favor describe el gasto realizado")
-            }
+        val validationError = CashValidation.validateSubmission(
+            type = state.selectedType,
+            amount = state.grandTotal,
+            notes = state.notes,
+            canClose = state.summary.canClose,
+            canCloseReason = state.summary.canCloseReason,
+            totalSalesForDay = state.parsedTotalSalesForDay,
+        )
+        if (validationError != null) {
+            _uiState.update { it.copy(submitError = validationError) }
             return
-        }
-
-        if (state.selectedType == MovementType.CLOSING) {
-            if (!state.summary.canClose) {
-                _uiState.update {
-                    it.copy(
-                        submitError = state.summary.canCloseReason
-                            ?: "No se puede cerrar la caja en este momento",
-                    )
-                }
-                return
-            }
-            val salesForDay = state.parsedTotalSalesForDay
-            if (salesForDay != null && salesForDay < 0) {
-                _uiState.update {
-                    it.copy(submitError = "Las ventas del dia no pueden ser negativas")
-                }
-                return
-            }
         }
 
         viewModelScope.launch {
@@ -257,16 +248,8 @@ class CashViewModel @Inject constructor(
             val metadata = when (state.selectedType) {
                 MovementType.OPENING, MovementType.CLOSING -> {
                     val discrepancyType = if (state.selectedType == MovementType.CLOSING) {
-                        state.discrepancyPreview?.let { disc ->
-                            when {
-                                disc > 0 -> "sobrante"
-                                disc < 0 -> "faltante"
-                                else -> "exacto"
-                            }
-                        }
-                    } else {
-                        null
-                    }
+                        state.discrepancyPreview?.let(CashValidation::discrepancyTypeForMetadata)
+                    } else null
                     CashMovementMetadata(
                         denominations = state.buildBreakdown(),
                         totalSalesForDay = state.parsedTotalSalesForDay,

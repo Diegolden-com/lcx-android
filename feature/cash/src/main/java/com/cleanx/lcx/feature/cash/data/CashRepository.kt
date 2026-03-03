@@ -133,12 +133,10 @@ class CashRepository @Inject constructor(
         }.map { movements ->
             val hasOpening = movements.any { it.type == MovementType.OPENING }
             val hasClosure = movements.any { it.type == MovementType.CLOSING }
-
-            when {
-                !hasOpening -> false to "No se ha abierto la caja hoy"
-                hasClosure -> false to "La caja ya fue cerrada hoy"
-                else -> true to null
-            }
+            CashValidation.canCloseRegister(
+                hasOpening = hasOpening,
+                hasClosure = hasClosure,
+            )
         }
     }
 
@@ -172,12 +170,10 @@ class CashRepository @Inject constructor(
 
         val hasOpening = openingMovement != null
         val hasClosure = closingMovement != null
-        val canClose = hasOpening && !hasClosure
-        val canCloseReason = when {
-            !hasOpening -> "No se ha abierto la caja hoy"
-            hasClosure -> "La caja ya fue cerrada hoy"
-            else -> null
-        }
+        val (canClose, canCloseReason) = CashValidation.canCloseRegister(
+            hasOpening = hasOpening,
+            hasClosure = hasClosure,
+        )
 
         return CashSummary(
             openingAmount = openingAmount,
