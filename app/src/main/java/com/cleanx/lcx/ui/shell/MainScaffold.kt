@@ -1,11 +1,15 @@
 package com.cleanx.lcx.ui.shell
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -40,7 +44,7 @@ import com.cleanx.lcx.feature.tickets.ui.list.TicketListViewModel
 import com.cleanx.lcx.core.transaction.ui.TransactionScreen
 import com.cleanx.lcx.ui.placeholder.ChecklistScreen
 import com.cleanx.lcx.ui.placeholder.DashboardScreen
-import com.cleanx.lcx.ui.placeholder.MoreScreen
+import com.cleanx.lcx.ui.more.MoreScreen
 import com.cleanx.lcx.ui.placeholder.WaterScreen
 import com.cleanx.lcx.feature.cash.ui.CashScreen
 
@@ -246,7 +250,67 @@ fun MainScaffold(
             // ── Mas (More) tab ──────────────────────────────────────
             navigation<Screen.MoreGraph>(startDestination = Screen.More) {
                 composable<Screen.More> {
-                    MoreScreen()
+                    MoreScreen(
+                        onNavigate = { screen ->
+                            tabNavController.navigate(screen)
+                        },
+                    )
+                }
+
+                // ── Operator module routes (placeholder shells) ─────
+                composable<Screen.Sales> {
+                    OperatorPlaceholder("Ventas - Próximamente")
+                }
+                composable<Screen.IncidentsNew> {
+                    OperatorPlaceholder("Nueva Incidencia - Próximamente")
+                }
+                composable<Screen.IncidentsHistory> {
+                    OperatorPlaceholder("Historial de Incidencias - Próximamente")
+                }
+                composable<Screen.ShiftsControl> {
+                    OperatorPlaceholder("Control de Turnos - Próximamente")
+                }
+                composable<Screen.ShiftsHistory> {
+                    OperatorPlaceholder("Historial de Turnos - Próximamente")
+                }
+                composable<Screen.ShiftsSchedule> {
+                    OperatorPlaceholder("Horarios - Próximamente")
+                }
+                composable<Screen.ShiftsReports> {
+                    OperatorPlaceholder("Reportes de Turnos - Próximamente")
+                }
+                composable<Screen.DamagedClothingNew> {
+                    OperatorPlaceholder("Ropa Dañada - Nuevo Reporte - Próximamente")
+                }
+                composable<Screen.DamagedClothingHistory> {
+                    OperatorPlaceholder("Ropa Dañada - Historial - Próximamente")
+                }
+                composable<Screen.SuppliesInventory> {
+                    OperatorPlaceholder("Inventario de Insumos - Próximamente")
+                }
+                composable<Screen.SuppliesLabels> {
+                    OperatorPlaceholder("Etiquetas - Próximamente")
+                }
+                composable<Screen.SuppliesReports> {
+                    OperatorPlaceholder("Reportes de Insumos - Próximamente")
+                }
+                composable<Screen.SuppliesBrotherDebug> {
+                    OperatorPlaceholder("Debug Brother - Próximamente")
+                }
+                composable<Screen.Vacations> {
+                    OperatorPlaceholder("Vacaciones - Próximamente")
+                }
+                composable<Screen.CalendarMonthly> {
+                    OperatorPlaceholder("Calendario - Vista Mensual - Próximamente")
+                }
+                composable<Screen.CalendarEvents> {
+                    OperatorPlaceholder("Calendario - Eventos - Próximamente")
+                }
+                composable<Screen.BestPractices> {
+                    OperatorPlaceholder("Mejores Prácticas - Próximamente")
+                }
+                composable<Screen.Help> {
+                    OperatorPlaceholder("Ayuda - Próximamente")
                 }
             }
 
@@ -262,6 +326,23 @@ fun MainScaffold(
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Simple centered text placeholder used for operator module screens
+ * that are not yet implemented. Will be replaced by proper shells in R3.
+ */
+@Composable
+private fun OperatorPlaceholder(title: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+        )
+    }
+}
 
 private fun Ticket.toLabelData(): LabelData {
     val serviceTypeLabel = when (serviceType) {

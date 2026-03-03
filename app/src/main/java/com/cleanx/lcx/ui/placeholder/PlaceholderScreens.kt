@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -90,12 +89,3 @@ fun ChecklistScreen(modifier: Modifier = Modifier) {
     )
 }
 
-@Composable
-fun MoreScreen(modifier: Modifier = Modifier) {
-    PlaceholderScreen(
-        icon = Icons.Filled.MoreHoriz,
-        title = "Mas",
-        subtitle = "Opciones adicionales (proximamente)",
-        modifier = modifier,
-    )
-}

@@ -1,15 +1,16 @@
 package com.cleanx.lcx.core.navigation
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Checklist
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.ConfirmationNumber
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * Defines the five bottom-navigation tabs shown after login.
+ * Defines the six bottom-navigation tabs shown after login.
  *
  * Each item carries:
  *  - a user-visible [label] (Spanish, matching the PWA)
@@ -46,5 +47,10 @@ enum class BottomNavItem(
         label = "Caja",
         icon = Icons.Filled.AttachMoney,
         graphRoute = Screen.CashGraph,
+    ),
+    MAS(
+        label = "Más",
+        icon = Icons.Filled.MoreHoriz,
+        graphRoute = Screen.MoreGraph,
     ),
 }
