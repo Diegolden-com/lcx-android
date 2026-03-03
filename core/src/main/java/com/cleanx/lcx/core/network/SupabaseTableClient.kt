@@ -79,7 +79,7 @@ sealed class SupabaseError(
  */
 @Singleton
 class SupabaseTableClient @Inject constructor(
-    private val client: SupabaseClient,
+    @PublishedApi internal val client: SupabaseClient,
 ) {
 
     // -- SELECT ---------------------------------------------------------------
@@ -160,6 +160,19 @@ class SupabaseTableClient @Inject constructor(
         client.from(table).insert(value) {
             select()
         }.decodeSingle<T>()
+    }
+
+    /**
+     * Insert a payload type [I] and decode the inserted row as [O].
+     * Useful when insert DTO and select DTO differ.
+     */
+    suspend inline fun <reified I : Any, reified O : Any> insertReturning(
+        table: String,
+        value: I,
+    ): Result<O> = runCatching(table, "insertReturning") {
+        client.from(table).insert(value) {
+            select()
+        }.decodeSingle<O>()
     }
 
     /**

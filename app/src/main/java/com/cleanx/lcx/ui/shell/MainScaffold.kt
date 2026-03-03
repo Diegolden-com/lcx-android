@@ -30,6 +30,7 @@ import com.cleanx.lcx.feature.payments.ui.PaymentDiagnosticsScreen
 import com.cleanx.lcx.feature.printing.data.LabelData
 import com.cleanx.lcx.feature.printing.ui.PrintScreen
 import com.cleanx.lcx.feature.printing.ui.PrintViewModel
+import com.cleanx.lcx.feature.cash.ui.CashViewModel
 import com.cleanx.lcx.feature.tickets.ui.create.CreateTicketScreen
 import com.cleanx.lcx.feature.tickets.ui.create.CreateTicketViewModel
 import com.cleanx.lcx.feature.tickets.ui.detail.TicketDetailScreen
@@ -252,7 +253,8 @@ fun MainScaffold(
             // ── Caja (Cash) tab ──────────────────────────────────────
             navigation<Screen.CashGraph>(startDestination = Screen.Cash) {
                 composable<Screen.Cash> {
-                    CashScreen()
+                    val cashViewModel: CashViewModel = hiltViewModel()
+                    CashScreen(viewModel = cashViewModel)
                 }
             }
         }

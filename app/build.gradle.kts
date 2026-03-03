@@ -181,6 +181,7 @@ dependencies {
 
     // Logging
     implementation(libs.timber)
+    implementation(libs.okhttp)
 
     // Testing
     testImplementation(libs.junit)

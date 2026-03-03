@@ -74,7 +74,7 @@ class CashRepository @Inject constructor(
             insert.amount,
         )
 
-        return supabase.insert(table, insert)
+        return supabase.insertReturning<CashMovementInsert, CashMovementRow>(table, insert)
     }
 
     // -- MOVEMENT HISTORY -----------------------------------------------------
