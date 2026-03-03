@@ -111,11 +111,11 @@ Installed on 1 device.
 | Caso P0 | Físico USB | Cobertura alternativa local | Evidencia |
 |---|---|---|---|
 | Login válido/inválido | PENDIENTE (manual) | PASS | `AuthRepositoryTest` 9/9 OK |
-| Crear ticket (validación + éxito) | PENDIENTE (manual) | PASS | `CreateTicketsContractTest` 16/16 OK |
+| Crear ticket (validación + éxito) | PASS | PASS | `device-smoke.log` (`POST /api/tickets` 200, correlation `f712a2b8-ea26-447c-a0a6-e189d10e4a2e`) |
 | Cobro success | PENDIENTE (manual) | PASS | `TransactionOrchestratorTest` (happy path) |
 | Cobro cancel (NO paid) | PENDIENTE (manual) | PASS | `TransactionOrchestratorTest` (`payment cancellation`) |
 | Cobro success + fallo API (retry sync, NO recobrar) | PENDIENTE (manual) | PASS | `TransactionOrchestratorTest` (`PaymentSucceededApiFailed` + retry sync) |
-| Impresión success | PENDIENTE (manual) | PASS | `TransactionOrchestratorTest` |
+| Impresión success | PASS | PASS | `device-smoke.log` (`PrintModule: using BrotherPrinterManager`, `Brother print success` en `QL-810W`) |
 | Impresión fail + retry | PENDIENTE (manual) | PASS | `TransactionOrchestratorTest` (`print failure then retry succeeds`) |
 | Impresión skip | PENDIENTE (manual) | PASS | `TransactionOrchestratorTest` (`print failure then skip`) |
 | Reanudación tras kill app (`resumeTransaction`) | PENDIENTE (manual) | PASS | `TransactionOrchestratorTest` (bloque resume) + `TransactionPersistenceTest` |
@@ -127,7 +127,9 @@ Installed on 1 device.
 - Captura habilitada y artefactos creados:
   - `docs/evidence/20260302/device-smoke.log`
   - `docs/evidence/20260302/device-smoke-summary.md`
-- Estado: **PARCIAL** (archivo existe; falta corrida manual completa para poblar trazas E2E).
+- Estado: **PASS (parcial por casos)**.
+  - Confirmado runtime real Brother (sin stub) y éxito de impresión WiFi.
+  - Correlation ID observado en móvil: `f712a2b8-ea26-447c-a0a6-e189d10e4a2e`.
 
 ### 5.2 Trazabilidad por correlación (verificación de implementación)
 - Android emite/propaga correlación y logs por tags:
@@ -139,7 +141,7 @@ Installed on 1 device.
   - `PATCH /api/tickets/:id/status` -> `action: status_update`
   - `PATCH /api/tickets/:id/payment` -> `action: payment_update`
 
-Estado Q3: **PARCIAL** (implementación validada por código, evidencia runtime end-to-end pendiente de device).
+Estado Q3: **PARCIAL** (ya hay evidencia runtime en device para create+print; faltan evidencias físicas de cobro/resume/casos de error).
 
 ## 6) Q4 Bugfix Agent
 
@@ -186,7 +188,8 @@ Racional: hace inclusivo el corte temporal, evita dejar “zombies” terminales
 | QA-20260302-BT-PERM | P1 | FIXED | `BLUETOOTH_CONNECT` estaba denegado en Android 16; se añadió solicitud runtime en flujos de impresión/settings y permiso en manifest. |
 | QA-20260302-BLOCKER-USB | P0 (infra) | FIXED | Dispositivo visible en `adb` + `adb reverse` operativo. |
 | QA-20260302-BROTHER-AAR | P0 | FIXED | AAR integrado en `feature/printing/libs/BrotherPrintLibrary.aar`; build real habilitado. |
-| QA-20260302-E2E-EVIDENCE | P0 | OPEN | Falta evidencia manual final de flujo completo físico (login→ticket→cobro→impresión) con correlación cruzada. |
+| QA-20260302-BROTHER-NAMESPACE | P0 | FIXED | Mismatch de namespace (`lmprinter.PrintSettings` vs `lmprinter.setting.PrintSettings`) causaba fallback a stub; bridge actualizado. |
+| QA-20260302-E2E-EVIDENCE | P1 | OPEN | Faltan evidencias físicas de cobro/resume y escenarios de fallo (create+print real ya confirmados). |
 
 ## 8) Commits
 - `800b8ec` - `fix(android): make terminal transaction cleanup inclusive at cutoff`
@@ -198,6 +201,7 @@ Racional: hace inclusivo el corte temporal, evita dejar “zombies” terminales
 - `7f88e99` - `docs(qa): add physical-device smoke logs and summary`
 - `8b4b9ef` - `test(printing): harden Brother v4 error and retry coverage`
 - `63324fb` - `chore(printing): allow BrotherPrintLibrary.aar despite global aar ignore`
+- `b7a4eda` - `fix(printing): support Brother SDK v4 setting namespace in reflection bridge`
 - `1886f6b` (repo `v0-lcx-pwa`) - `chore(qa): add backend correlation proof script and evidence`
 
 ## 9) Próximo paso operativo para cerrar QA físico

@@ -1,0 +1,11 @@
+03-02 19:14:54.081 10196 10196 D TICKET  : Creating 1 tickets (source=encargo)
+03-02 19:14:54.102 10196 10508 D HTTP    : [f712a2b8-ea26-447c-a0a6-e189d10e4a2e] POST http://127.0.0.1:3000/api/tickets
+03-02 19:14:54.107 10196 10508 I okhttp.OkHttpClient: X-Correlation-Id: f712a2b8-ea26-447c-a0a6-e189d10e4a2e
+03-02 19:14:54.215 10196 10508 D HTTP    : [f712a2b8-ea26-447c-a0a6-e189d10e4a2e] 200 http://127.0.0.1:3000/api/tickets
+03-02 19:15:00.904 10196 10196 I PrintModule: PrintModule: using BrotherPrinterManager (useRealBrother=true)
+03-02 19:15:00.916 10196 10196 D PRINT   : Discovering printers...
+03-02 19:15:05.997 10196 10234 D PRINT   : Brother discovery completed: 16 printer(s)
+03-02 19:15:08.831 10196 10196 D PRINT   : Connecting to: QL-810W (192.168.100.47)
+03-02 19:15:09.033 10196 10234 I PRINT   : Brother connected: type=WIFI address=192.168.100.47 name=QL-810W
+03-02 19:15:09.080 10196 10196 D PRINT   : Printing label: ticketNumber=T-20260303-0004, attempt=1/3
+03-02 19:15:10.450 10196 10237 I PRINT   : Brother print success: ticket=T-20260303-0004 folio=4 printer=QL-810W

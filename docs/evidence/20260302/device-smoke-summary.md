@@ -1,7 +1,7 @@
 # Device Smoke Test Summary
 
 - **Date:** 2026-03-02
-- **Branch:** `codex/device-smoke-evidence`
+- **Branch:** `codex/p0-manual-matrix`
 
 ## Device Info
 
@@ -24,31 +24,42 @@
 ## Log Capture Results
 
 - **Logcat buffer cleared:** YES
-- **Capture mode:** `adb logcat -d` (dump current buffer)
+- **Capture mode:** `adb logcat` (live stream with filter + tee)
 - **Filter pattern:** `TXN|HTTP|TICKET|PAYMENT|PRINT|BROTHER|Correlation`
-- **Lines captured:** 0
-- **Status:** Pending manual execution
+- **Status:** PASS (flujo manual ejecutado)
 
-The log buffer was intentionally cleared before capture. No matching log lines
-were found because the manual app flow has not yet been executed on the device.
+### Evidencia clave capturada
 
-## Manual Flow Required
+```text
+03-02 19:14:54.102 D HTTP  : [f712a2b8-ea26-447c-a0a6-e189d10e4a2e] POST http://127.0.0.1:3000/api/tickets
+03-02 19:14:54.107 I okhttp.OkHttpClient: X-Correlation-Id: f712a2b8-ea26-447c-a0a6-e189d10e4a2e
+03-02 19:15:00.904 I PrintModule: using BrotherPrinterManager (useRealBrother=true)
+03-02 19:15:05.997 D PRINT : Brother discovery completed: 16 printer(s)
+03-02 19:15:08.831 D PRINT : Connecting to: QL-810W (192.168.100.47)
+03-02 19:15:09.033 I PRINT : Brother connected: type=WIFI address=192.168.100.47 name=QL-810W
+03-02 19:15:10.450 I PRINT : Brother print success: ticket=T-20260303-0004 folio=4 printer=QL-810W
+```
 
-The following end-to-end flow must be executed manually on the Pixel 9 device
-to populate `device-smoke.log` with real transaction evidence:
+### Verificación de no-regresión stub
 
-1. **Login** -- Authenticate into the LCX app
-2. **Create Ticket** -- Create a new ticket/transaction
-3. **Charge** -- Process a payment (card or cash)
-4. **Print** -- Print receipt via Brother printer
-5. **Persist** -- Verify transaction persistence
+- No aparecieron líneas `STUB-BROTHER` durante esta corrida.
+- No apareció `Brother SDK reflection bridge unavailable` después del hotfix.
 
-After executing the flow, re-run the logcat capture:
+### Correlación backend (A3 script)
+
+Comando:
 
 ```bash
-adb logcat -d | grep -E "TXN|HTTP|TICKET|PAYMENT|PRINT|BROTHER|Correlation" > docs/evidence/20260302/device-smoke.log
+cd /Users/diegolden/Code/LCX/v0-lcx-pwa
+./scripts/qa/correlation-audit-proof.sh f712a2b8-ea26-447c-a0a6-e189d10e4a2e
+```
+
+Resultado:
+
+```text
+| ticket_create | 2026-03-03 01:14:52.733 | /api/tickets | f712a2b8-ea26-447c-a0a6-e189d10e4a2e | source=encargo count=1 |
 ```
 
 ## Errors
 
-- None. Device is connected, ADB is responsive, port forwarding is active.
+- Ninguno en el smoke de impresión WiFi.
