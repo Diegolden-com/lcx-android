@@ -8,7 +8,7 @@ plugins {
 }
 
 android {
-    namespace = "com.cleanx.lcx.core"
+    namespace = "com.cleanx.lcx.feature.water"
     compileSdk = 36
 
     defaultConfig {
@@ -29,8 +29,7 @@ android {
 }
 
 dependencies {
-    // AndroidX Core
-    implementation(libs.androidx.core.ktx)
+    implementation(project(":core"))
 
     // Compose
     implementation(platform(libs.compose.bom))
@@ -39,33 +38,16 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
 
-    // Navigation
-    implementation(libs.navigation.compose)
-
     // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
-    // Network – Retrofit (REST API)
-    implementation(libs.retrofit)
-    implementation(libs.retrofit.kotlinx.serialization)
-    implementation(libs.okhttp)
-    implementation(libs.okhttp.logging)
-
-    // Network – Supabase (direct table access)
+    // Supabase (direct table access via SupabaseTableClient in :core)
     implementation(libs.supabase.postgrest)
-    implementation(libs.ktor.client.okhttp)
-    implementation(libs.kotlinx.datetime)
-
-    // DataStore
-    implementation(libs.datastore.preferences)
 
     // Serialization
     implementation(libs.kotlinx.serialization.json)
-
-    // Coroutines
-    implementation(libs.kotlinx.coroutines)
 
     // Lifecycle
     implementation(libs.lifecycle.runtime.compose)
@@ -77,5 +59,6 @@ dependencies {
 
     // Testing
     testImplementation(libs.junit)
-    testImplementation(libs.kotlinx.serialization.json)
+    testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
