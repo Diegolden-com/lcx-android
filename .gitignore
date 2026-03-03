@@ -3,6 +3,7 @@
 *.aar
 *.ap_
 *.aab
+!feature/printing/libs/BrotherPrintLibrary.aar
 
 # Files for the ART/Dalvik VM
 *.dex
