@@ -19,6 +19,19 @@ fun readConfig(
     return providers.gradleProperty(propertyName).orElse(envValue ?: defaultValue).get()
 }
 
+fun readBooleanConfig(
+    propertyName: String,
+    envName: String,
+    defaultValue: Boolean,
+): Boolean {
+    val raw = readConfig(propertyName, envName, defaultValue.toString()).trim().lowercase()
+    return when (raw) {
+        "1", "true", "yes", "y", "on" -> true
+        "0", "false", "no", "n", "off" -> false
+        else -> defaultValue
+    }
+}
+
 val devApiBaseUrl = readConfig(
     propertyName = "LCX_DEV_API_BASE_URL",
     envName = "LCX_DEV_API_BASE_URL",
@@ -37,6 +50,11 @@ val devSupabaseAnonKey = readConfig(
         envName = "NEXT_PUBLIC_SUPABASE_ANON_KEY",
         defaultValue = "dev-anon-key",
     ),
+)
+val devUseRealBrother = readBooleanConfig(
+    propertyName = "LCX_DEV_USE_REAL_BROTHER",
+    envName = "LCX_DEV_USE_REAL_BROTHER",
+    defaultValue = false,
 )
 
 android {
@@ -67,7 +85,7 @@ android {
             buildConfigField("String", "SUPABASE_URL", devSupabaseUrl.toBuildConfigString())
             buildConfigField("String", "SUPABASE_ANON_KEY", devSupabaseAnonKey.toBuildConfigString())
             buildConfigField("Boolean", "USE_REAL_ZETTLE", "false")
-            buildConfigField("Boolean", "USE_REAL_BROTHER", "false")
+            buildConfigField("Boolean", "USE_REAL_BROTHER", devUseRealBrother.toString())
         }
         create("staging") {
             dimension = "environment"

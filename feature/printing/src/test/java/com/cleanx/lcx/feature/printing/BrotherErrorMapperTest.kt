@@ -89,4 +89,28 @@ class BrotherErrorMapperTest {
             assert(result.message.isNotBlank()) { "Message should not be blank for $code" }
         }
     }
+
+    @Test
+    fun `sdk v4 no media maps to NO_PAPER`() {
+        val result = BrotherErrorMapper.mapSdkV4Error("PrinterStatusErrorNoMedia")
+        assertEquals("NO_PAPER", result.code)
+        assertEquals("Sin papel/etiquetas", result.message)
+    }
+
+    @Test
+    fun `sdk v4 channel timeout maps to COMMUNICATION_ERROR`() {
+        val result = BrotherErrorMapper.mapSdkV4Error("ChannelTimeout")
+        assertEquals("COMMUNICATION_ERROR", result.code)
+        assertEquals("Error de comunicación", result.message)
+    }
+
+    @Test
+    fun `sdk v4 unknown uses description when available`() {
+        val result = BrotherErrorMapper.mapSdkV4Error(
+            errorCode = "SomethingElse",
+            description = "SDK returned unknown status",
+        )
+        assertEquals("UNKNOWN_PRINTER_ERROR", result.code)
+        assertEquals("SDK returned unknown status", result.message)
+    }
 }

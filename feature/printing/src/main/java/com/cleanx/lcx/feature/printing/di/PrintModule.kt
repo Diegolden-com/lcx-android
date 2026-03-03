@@ -1,6 +1,7 @@
 package com.cleanx.lcx.feature.printing.di
 
 import com.cleanx.lcx.core.config.FeatureFlags
+import com.cleanx.lcx.feature.printing.data.BrotherPrinterManager
 import com.cleanx.lcx.feature.printing.data.PrinterManager
 import com.cleanx.lcx.feature.printing.data.StubPrinterManager
 import dagger.Module
@@ -14,9 +15,8 @@ import javax.inject.Singleton
  * Hilt module that wires [PrinterManager] to the correct implementation
  * based on the [FeatureFlags.useRealBrother] flag.
  *
- * - `dev`     → [StubPrinterManager] (no hardware required)
- * - `staging` → [StubPrinterManager] (Brother SDK not yet available)
- * - `prod`    → real Brother SDK implementation (when available)
+ * - When `useRealBrother=true` and AAR is present: [BrotherPrinterManager]
+ * - Otherwise: [StubPrinterManager]
  *
  * The flag is set per build variant in `app/build.gradle.kts`.
  */
@@ -29,12 +29,19 @@ object PrintModule {
     fun providePrinterManager(
         featureFlags: FeatureFlags,
         stubPrinterManager: StubPrinterManager,
+        brotherPrinterManager: BrotherPrinterManager,
     ): PrinterManager {
         return if (featureFlags.useRealBrother) {
-            // TODO: return BrotherPrinterManager(…) once the real Brother SDK AAR
-            //       is added as a dependency. For now, fall back to stub with a warning.
-            Timber.w("useRealBrother=true but real Brother SDK not yet integrated; falling back to stub.")
-            stubPrinterManager
+            if (brotherPrinterManager.isSdkAvailable()) {
+                Timber.i("PrintModule: using BrotherPrinterManager (useRealBrother=true)")
+                brotherPrinterManager
+            } else {
+                Timber.w(
+                    "useRealBrother=true but Brother SDK AAR is missing; " +
+                        "falling back to StubPrinterManager",
+                )
+                stubPrinterManager
+            }
         } else {
             Timber.d("PrintModule: using StubPrinterManager (useRealBrother=false)")
             stubPrinterManager

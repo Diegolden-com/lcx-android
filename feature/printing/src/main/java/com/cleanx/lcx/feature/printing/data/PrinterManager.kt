@@ -6,7 +6,7 @@ package com.cleanx.lcx.feature.printing.data
  * Isolates Brother SDK specifics behind a clean interface so the rest of
  * the app never depends on the physical SDK.  Implementations:
  * - [StubPrinterManager] for development / testing without hardware
- * - (future) BrotherPrinterManager wrapping the real Brother Mobile SDK AAR
+ * - [BrotherPrinterManager] wrapping the real Brother Mobile SDK AAR
  */
 interface PrinterManager {
     /** Scan for available printers on the network / nearby Bluetooth. */

@@ -36,6 +36,16 @@ android {
 dependencies {
     implementation(project(":core"))
 
+    val brotherAar = file("libs/BrotherPrintLibrary.aar")
+    if (brotherAar.exists()) {
+        implementation(files(brotherAar))
+    } else {
+        logger.warn(
+            "Brother SDK AAR not found at ${brotherAar.path}. " +
+                "Real printing will be unavailable for this build.",
+        )
+    }
+
     // Compose
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
