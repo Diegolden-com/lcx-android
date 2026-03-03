@@ -41,6 +41,8 @@ import com.cleanx.lcx.feature.tickets.ui.detail.TicketDetailScreen
 import com.cleanx.lcx.feature.tickets.ui.detail.TicketDetailViewModel
 import com.cleanx.lcx.feature.tickets.ui.list.TicketListScreen
 import com.cleanx.lcx.feature.tickets.ui.list.TicketListViewModel
+import com.cleanx.lcx.feature.tickets.ui.list.TicketPresetScreen
+import androidx.navigation.toRoute
 import com.cleanx.lcx.core.transaction.ui.TransactionScreen
 import com.cleanx.lcx.ui.placeholder.ChecklistScreen
 import com.cleanx.lcx.ui.placeholder.DashboardScreen
@@ -230,6 +232,18 @@ fun MainScaffold(
                             onBack = { tabNavController.popBackStack() },
                         )
                     }
+                }
+
+                composable<Screen.TicketPreset> { backStackEntry ->
+                    val preset = backStackEntry.toRoute<Screen.TicketPreset>().preset
+                    TicketPresetScreen(
+                        preset = preset,
+                        viewModel = ticketListViewModel,
+                        onTicketClick = { ticket ->
+                            tabNavController.navigate(Screen.TicketDetail(ticketId = ticket.id))
+                        },
+                        onBack = { tabNavController.popBackStack() },
+                    )
                 }
             }
 
