@@ -164,7 +164,8 @@ Histórico base:
 - `b103c04`
 
 Corrida actual:
-- (pendiente de commit en esta actualización de reporte)
+- `c40a5d0` - `fix(auth): add explicit relogin path from ticket list`
+- `96741fd` - `docs(qa): update physical-device report with print pass and 401 retry evidence`
 
 ## 7) Estado final de cierre P0
 - Bloqueantes de infraestructura (USB/ADB): **cerrados**.
