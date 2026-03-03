@@ -14,24 +14,24 @@
   - Flag dev configurable: `LCX_DEV_USE_REAL_BROTHER`.
   - Configuración explícita de etiqueta 209 (`DieCutW62H29` / DK-1209).
   - Solicitud runtime de permiso `BLUETOOTH_CONNECT` en pantallas de impresión/settings.
-- Bloqueo actual para impresión física real:
-  - Falta AAR de Brother en `feature/printing/libs/BrotherPrintLibrary.aar`.
-  - Evidencia en build:
-    - `Brother SDK AAR not found ... Real printing will be unavailable for this build.`
+- Estado AAR Brother:
+  - `feature/printing/libs/BrotherPrintLibrary.aar` integrado desde `bpsdka4130.zip`.
+  - Build dev (`:app:assembleDevDebug`) compila con librería nativa `libcreatedata.so`.
+  - App instalada con `USE_REAL_BROTHER=true` y endpoints locales.
 - Severidad:
-  - **P0 abierto**: sin AAR no hay impresión física real (solo fallback controlado a stub).
+  - **P0 infra abierto**: ninguno.
+  - **Pendiente**: evidencia manual runtime end-to-end de impresión física (BT/WiFi).
 
 ## 1) Resumen Ejecutivo
 - Fecha/hora de ejecución: 2026-03-02 17:56:25 CST (America/Mexico_City).
 - Objetivo: QA P0 real en teléfono Android por USB contra entorno local.
 - Resultado general: **PARCIAL EN DISPOSITIVO FÍSICO**.
-  - Infra USB/ADB: resuelta (ver sección 0).
-  - QA físico end-to-end con impresión real: pendiente por falta del AAR Brother.
+  - Infra USB/ADB + AAR Brother: resuelto (ver sección 0).
+  - QA físico end-to-end con impresión real: pendiente de ejecución manual/evidencia final.
 - Cobertura alternativa ejecutada: pruebas unitarias/contrato/regresión completas en Android + validación de rutas API y correlación en backend.
 - Hallazgos críticos:
   - **P1** corregido: cleanup de transacciones terminales en límite temporal (`updatedAt <= cutoff`).
-  - **P0 abiertos**:
-    - `QA-20260302-BROTHER-AAR` (sin AAR no hay impresión física real).
+  - **P0 abiertos**: ninguno de infraestructura.
 
 ## 2) Contexto y Entorno
 - Android repo: `/Users/diegolden/Code/LCX/lcx-android` (base `af294f3`, rama `main`).
@@ -106,25 +106,28 @@ Installed on 1 device.
 
 ## 4) Q2 Functional P0 Agent (Checklist)
 
-> Nota: el bloqueo USB inicial se resolvió. Aun falta cerrar ejecución manual end-to-end con impresión real porque no está presente el AAR de Brother.
+> Nota: el bloqueo USB inicial y el bloqueo de AAR ya se resolvieron. Falta completar evidencia manual end-to-end en dispositivo físico.
 
 | Caso P0 | Físico USB | Cobertura alternativa local | Evidencia |
 |---|---|---|---|
-| Login válido/inválido | FAIL (bloqueado) | PASS | `AuthRepositoryTest` 9/9 OK |
-| Crear ticket (validación + éxito) | FAIL (bloqueado) | PASS | `CreateTicketsContractTest` 16/16 OK |
-| Cobro success | FAIL (bloqueado) | PASS | `TransactionOrchestratorTest` (happy path) |
-| Cobro cancel (NO paid) | FAIL (bloqueado) | PASS | `TransactionOrchestratorTest` (`payment cancellation`) |
-| Cobro success + fallo API (retry sync, NO recobrar) | FAIL (bloqueado) | PASS | `TransactionOrchestratorTest` (`PaymentSucceededApiFailed` + retry sync) |
-| Impresión success | FAIL (bloqueado) | PASS | `TransactionOrchestratorTest` |
-| Impresión fail + retry | FAIL (bloqueado) | PASS | `TransactionOrchestratorTest` (`print failure then retry succeeds`) |
-| Impresión skip | FAIL (bloqueado) | PASS | `TransactionOrchestratorTest` (`print failure then skip`) |
-| Reanudación tras kill app (`resumeTransaction`) | FAIL (bloqueado) | PASS | `TransactionOrchestratorTest` (bloque resume) + `TransactionPersistenceTest` |
-| Opening checklist bloqueante (409) con mensaje claro | FAIL (bloqueado) | PASS | `CreateTicketsContractTest` (`409 OPENING_CHECKLIST...`) |
+| Login válido/inválido | PENDIENTE (manual) | PASS | `AuthRepositoryTest` 9/9 OK |
+| Crear ticket (validación + éxito) | PENDIENTE (manual) | PASS | `CreateTicketsContractTest` 16/16 OK |
+| Cobro success | PENDIENTE (manual) | PASS | `TransactionOrchestratorTest` (happy path) |
+| Cobro cancel (NO paid) | PENDIENTE (manual) | PASS | `TransactionOrchestratorTest` (`payment cancellation`) |
+| Cobro success + fallo API (retry sync, NO recobrar) | PENDIENTE (manual) | PASS | `TransactionOrchestratorTest` (`PaymentSucceededApiFailed` + retry sync) |
+| Impresión success | PENDIENTE (manual) | PASS | `TransactionOrchestratorTest` |
+| Impresión fail + retry | PENDIENTE (manual) | PASS | `TransactionOrchestratorTest` (`print failure then retry succeeds`) |
+| Impresión skip | PENDIENTE (manual) | PASS | `TransactionOrchestratorTest` (`print failure then skip`) |
+| Reanudación tras kill app (`resumeTransaction`) | PENDIENTE (manual) | PASS | `TransactionOrchestratorTest` (bloque resume) + `TransactionPersistenceTest` |
+| Opening checklist bloqueante (409) con mensaje claro | PENDIENTE (manual) | PASS | `CreateTicketsContractTest` (`409 OPENING_CHECKLIST...`) |
 
 ## 5) Q3 Observability Agent
 
 ### 5.1 Captura de logs en dispositivo
-- `adb logcat` con filtros `TXN|HTTP|TICKET|PAYMENT|PRINT|Correlation`: **EJECUTABLE** (device visible). Evidencia final pendiente en corrida con AAR Brother.
+- Captura habilitada y artefactos creados:
+  - `docs/evidence/20260302/device-smoke.log`
+  - `docs/evidence/20260302/device-smoke-summary.md`
+- Estado: **PARCIAL** (archivo existe; falta corrida manual completa para poblar trazas E2E).
 
 ### 5.2 Trazabilidad por correlación (verificación de implementación)
 - Android emite/propaga correlación y logs por tags:
@@ -181,8 +184,9 @@ Racional: hace inclusivo el corte temporal, evita dejar “zombies” terminales
 |---|---|---|---|
 | QA-20260302-01 | P1 | FIXED | Cleanup de transacciones terminales no inclusivo en límite temporal (`<` vs `<=`). |
 | QA-20260302-BT-PERM | P1 | FIXED | `BLUETOOTH_CONNECT` estaba denegado en Android 16; se añadió solicitud runtime en flujos de impresión/settings y permiso en manifest. |
-| QA-20260302-BLOCKER-USB | P0 (infra) | OPEN | No hay dispositivo visible en `adb`; bloquea QA físico USB end-to-end. |
-| QA-20260302-BROTHER-AAR | P0 | OPEN | No se puede activar impresión física real sin `BrotherPrintLibrary.aar`; build cae a `StubPrinterManager` por diseño. |
+| QA-20260302-BLOCKER-USB | P0 (infra) | FIXED | Dispositivo visible en `adb` + `adb reverse` operativo. |
+| QA-20260302-BROTHER-AAR | P0 | FIXED | AAR integrado en `feature/printing/libs/BrotherPrintLibrary.aar`; build real habilitado. |
+| QA-20260302-E2E-EVIDENCE | P0 | OPEN | Falta evidencia manual final de flujo completo físico (login→ticket→cobro→impresión) con correlación cruzada. |
 
 ## 8) Commits
 - `800b8ec` - `fix(android): make terminal transaction cleanup inclusive at cutoff`
@@ -190,11 +194,13 @@ Racional: hace inclusivo el corte temporal, evita dejar “zombies” terminales
 - `1b5cf4c` - `fix(printing-ui): wire label payload and request bluetooth permission`
 - `76340c4` - `feat(printing): add Brother SDK v4 manager with optional AAR wiring`
 - `0b9ae0a` - `docs(qa): update physical-device report with Brother integration status`
+- `2a67b9a` - `chore(printing): add BrotherPrintLibrary.aar from local SDK zip`
+- `7f88e99` - `docs(qa): add physical-device smoke logs and summary`
+- `8b4b9ef` - `test(printing): harden Brother v4 error and retry coverage`
+- `63324fb` - `chore(printing): allow BrotherPrintLibrary.aar despite global aar ignore`
+- `1886f6b` (repo `v0-lcx-pwa`) - `chore(qa): add backend correlation proof script and evidence`
 
 ## 9) Próximo paso operativo para cerrar QA físico
-1. Conectar teléfono por USB y autorizar huella RSA (`adb devices -l` debe mostrar estado `device`).
-2. Repetir:
-   - `adb reverse tcp:3000 tcp:3000`
-   - `adb reverse tcp:54321 tcp:54321`
-   - `./gradlew :app:installDevDebug`
-3. Ejecutar checklist P0 en dispositivo y adjuntar evidencia `adb logcat` + correlación en `audit_logs`.
+1. Ejecutar flujo manual completo en Pixel 9 (Login -> Create Ticket -> Charge -> Print -> Persist/update).
+2. Capturar y adjuntar trazas `adb logcat` con filtros `TXN|HTTP|TICKET|PAYMENT|PRINT|BROTHER|Correlation`.
+3. Cruzar `correlation_id` con `scripts/qa/correlation-audit-proof.sh` y actualizar la matriz P0 final.
