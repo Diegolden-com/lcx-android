@@ -13,10 +13,13 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -54,7 +57,9 @@ class PrintRepositoryTest {
         repository = PrintRepository(printerManager, printerPreferences)
     }
 
-    // -- Discovery ------------------------------------------------------------
+    // =========================================================================
+    // Discovery
+    // =========================================================================
 
     @Test
     fun `discoverPrinters delegates to PrinterManager`() = runTest {
@@ -66,7 +71,9 @@ class PrintRepositoryTest {
         assertEquals(fakePrinter, printers[0])
     }
 
-    // -- Connection -----------------------------------------------------------
+    // =========================================================================
+    // Connection
+    // =========================================================================
 
     @Test
     fun `connectToSelected returns false when no printer selected`() = runTest {
@@ -113,7 +120,9 @@ class PrintRepositoryTest {
         verify { printerManager.disconnect() }
     }
 
-    // -- Auto-connect ---------------------------------------------------------
+    // =========================================================================
+    // Auto-connect
+    // =========================================================================
 
     @Test
     fun `tryAutoConnect returns false when auto-connect disabled`() = runTest {
@@ -167,7 +176,41 @@ class PrintRepositoryTest {
         assertFalse(result)
     }
 
-    // -- Retry logic ----------------------------------------------------------
+    @Test
+    fun `tryAutoConnect returns false when connect throws exception`() = runTest {
+        val saved = SavedPrinter(
+            name = "Flaky Printer",
+            address = "192.168.1.200",
+            connectionType = ConnectionType.WIFI,
+        )
+        every { printerPreferences.autoConnect } returns flowOf(true)
+        every { printerPreferences.savedPrinter } returns flowOf(saved)
+        coEvery { printerManager.connect(any()) } throws RuntimeException("Connection reset")
+
+        val result = repository.tryAutoConnect()
+
+        assertFalse(result)
+    }
+
+    @Test
+    fun `tryAutoConnect sets selectedPrinter on success`() = runTest {
+        val saved = SavedPrinter(
+            name = "Test Printer",
+            address = "192.168.1.100",
+            connectionType = ConnectionType.WIFI,
+        )
+        every { printerPreferences.autoConnect } returns flowOf(true)
+        every { printerPreferences.savedPrinter } returns flowOf(saved)
+        coEvery { printerManager.connect(any()) } returns true
+
+        repository.tryAutoConnect()
+
+        assertEquals(saved.toPrinterInfo(), repository.getSelectedPrinter())
+    }
+
+    // =========================================================================
+    // Retry logic — printWithRetry
+    // =========================================================================
 
     @Test
     fun `printWithRetry succeeds on first attempt`() = runTest {
@@ -177,6 +220,19 @@ class PrintRepositoryTest {
 
         assertTrue(result is PrintResult.Success)
         coVerify(exactly = 1) { printerManager.print(sampleLabel) }
+    }
+
+    @Test
+    fun `printWithRetry succeeds on second attempt after transient failure`() = runTest {
+        coEvery { printerManager.print(sampleLabel) } returnsMany listOf(
+            PrintResult.Error("COMMUNICATION_ERROR", "Error de comunicación"),
+            PrintResult.Success,
+        )
+
+        val result = repository.printWithRetry(sampleLabel, maxAttempts = 3)
+
+        assertTrue("Should succeed on second attempt", result is PrintResult.Success)
+        coVerify(exactly = 2) { printerManager.print(sampleLabel) }
     }
 
     @Test
@@ -206,6 +262,21 @@ class PrintRepositoryTest {
     }
 
     @Test
+    fun `printWithRetry returns last error code not the first`() = runTest {
+        coEvery { printerManager.print(sampleLabel) } returnsMany listOf(
+            PrintResult.Error("COMMUNICATION_ERROR", "transient"),
+            PrintResult.Error("PAPER_JAM", "paper stuck"),
+            PrintResult.Error("COVER_OPEN", "final error"),
+        )
+
+        val result = repository.printWithRetry(sampleLabel, maxAttempts = 3)
+
+        assertTrue(result is PrintResult.Error)
+        assertEquals("COVER_OPEN", (result as PrintResult.Error).code)
+        assertEquals("final error", result.message)
+    }
+
+    @Test
     fun `printWithRetry fails twice then succeeds`() = runTest {
         coEvery { printerManager.print(sampleLabel) } returnsMany listOf(
             PrintResult.Error("ERR1", "fail 1"),
@@ -219,9 +290,35 @@ class PrintRepositoryTest {
     }
 
     @Test
+    fun `printWithRetry with maxAttempts 1 does not retry`() = runTest {
+        coEvery { printerManager.print(sampleLabel) } returns
+            PrintResult.Error("ERR", "fail once")
+
+        val result = repository.printWithRetry(sampleLabel, maxAttempts = 1)
+
+        assertTrue(result is PrintResult.Error)
+        coVerify(exactly = 1) { printerManager.print(sampleLabel) }
+    }
+
+    @Test
+    fun `printWithRetry uses default MAX_RETRY_ATTEMPTS of 3`() = runTest {
+        coEvery { printerManager.print(sampleLabel) } returns
+            PrintResult.Error("ERR", "always fails")
+
+        repository.printWithRetry(sampleLabel)
+
+        coVerify(exactly = PrintRepository.MAX_RETRY_ATTEMPTS) {
+            printerManager.print(sampleLabel)
+        }
+    }
+
+    // =========================================================================
+    // Multi-copy printing
+    // =========================================================================
+
+    @Test
     fun `printWithRetry prints multiple copies when configured`() = runTest {
         every { printerPreferences.printCopies } returns flowOf(2)
-        // Re-create repo with updated preferences mock
         repository = PrintRepository(printerManager, printerPreferences)
         coEvery { printerManager.print(sampleLabel) } returns PrintResult.Success
 
@@ -247,11 +344,110 @@ class PrintRepositoryTest {
         assertTrue(result is PrintResult.Error)
     }
 
-    // -- Skip behavior --------------------------------------------------------
+    @Test
+    fun `printWithRetry with 3 copies prints exactly 3 on all success`() = runTest {
+        every { printerPreferences.printCopies } returns flowOf(3)
+        repository = PrintRepository(printerManager, printerPreferences)
+        coEvery { printerManager.print(sampleLabel) } returns PrintResult.Success
+
+        val result = repository.printWithRetry(sampleLabel)
+
+        assertTrue(result is PrintResult.Success)
+        coVerify(exactly = 3) { printerManager.print(sampleLabel) }
+    }
+
+    @Test
+    fun `printWithRetry multi-copy retries each copy independently`() = runTest {
+        every { printerPreferences.printCopies } returns flowOf(2)
+        repository = PrintRepository(printerManager, printerPreferences)
+        // Copy 1: fail once then succeed (2 calls)
+        // Copy 2: succeed immediately (1 call)
+        // Total: 3 calls
+        coEvery { printerManager.print(sampleLabel) } returnsMany listOf(
+            PrintResult.Error("ERR", "transient"),
+            PrintResult.Success,
+            PrintResult.Success,
+        )
+
+        val result = repository.printWithRetry(sampleLabel, maxAttempts = 3)
+
+        assertTrue(result is PrintResult.Success)
+        coVerify(exactly = 3) { printerManager.print(sampleLabel) }
+    }
+
+    // =========================================================================
+    // Cleanup on permanent failure
+    // =========================================================================
+
+    @Test
+    fun `permanent failure returns error without crashing`() = runTest {
+        coEvery { printerManager.print(sampleLabel) } returns
+            PrintResult.Error("COVER_OPEN", "Tapa de impresora abierta")
+
+        val result = repository.printWithRetry(sampleLabel, maxAttempts = 3)
+
+        assertTrue(result is PrintResult.Error)
+        assertEquals("COVER_OPEN", (result as PrintResult.Error).code)
+    }
+
+    @Test
+    fun `forgetPrinter disconnects clears preferences and nullifies selected`() = runTest {
+        repository.selectPrinter(fakePrinter)
+        repository.forgetPrinter()
+
+        verify { printerManager.disconnect() }
+        coVerify { printerPreferences.clearPrinter() }
+        assertNull(repository.getSelectedPrinter())
+    }
+
+    @Test
+    fun `disconnect after permanent print failure does not throw`() = runTest {
+        coEvery { printerManager.print(sampleLabel) } returns
+            PrintResult.Error("OVERHEATING", "Impresora sobrecalentada")
+
+        val result = repository.printWithRetry(sampleLabel, maxAttempts = 1)
+
+        assertTrue(result is PrintResult.Error)
+
+        // Caller decides to disconnect after permanent failure — must not throw
+        repository.disconnect()
+        verify { printerManager.disconnect() }
+    }
+
+    // =========================================================================
+    // Rapid-press / no double-action guards
+    // =========================================================================
+
+    @Test
+    fun `concurrent printWithRetry calls both execute independently`() = runTest {
+        coEvery { printerManager.print(sampleLabel) } returns PrintResult.Success
+
+        val result1 = async { repository.printWithRetry(sampleLabel, maxAttempts = 1) }
+        val result2 = async { repository.printWithRetry(sampleLabel, maxAttempts = 1) }
+
+        val results = awaitAll(result1, result2)
+        assertTrue(results.all { it is PrintResult.Success })
+    }
+
+    @Test
+    fun `selectPrinter overwrites previous selection`() {
+        val printer1 = PrinterInfo("P1", "1.1.1.1", ConnectionType.WIFI)
+        val printer2 = PrinterInfo("P2", "2.2.2.2", ConnectionType.BLUETOOTH)
+
+        repository.selectPrinter(printer1)
+        assertEquals(printer1, repository.getSelectedPrinter())
+
+        repository.selectPrinter(printer2)
+        assertEquals(printer2, repository.getSelectedPrinter())
+    }
+
+    // =========================================================================
+    // Selection / state
+    // =========================================================================
 
     @Test
     fun `selectedPrinter is null by default`() {
-        assertEquals(null, repository.getSelectedPrinter())
+        assertNull(repository.getSelectedPrinter())
     }
 
     @Test
@@ -268,7 +464,16 @@ class PrintRepositoryTest {
         assertTrue(repository.isConnected())
     }
 
-    // -- Forget printer -------------------------------------------------------
+    @Test
+    fun `isConnected returns false when PrinterManager says false`() {
+        every { printerManager.isConnected() } returns false
+
+        assertFalse(repository.isConnected())
+    }
+
+    // =========================================================================
+    // Forget printer
+    // =========================================================================
 
     @Test
     fun `forgetPrinter disconnects and clears preferences`() = runTest {
@@ -277,6 +482,15 @@ class PrintRepositoryTest {
 
         verify { printerManager.disconnect() }
         coVerify { printerPreferences.clearPrinter() }
-        assertEquals(null, repository.getSelectedPrinter())
+        assertNull(repository.getSelectedPrinter())
+    }
+
+    @Test
+    fun `forgetPrinter is safe when no printer was selected`() = runTest {
+        repository.forgetPrinter()
+
+        verify { printerManager.disconnect() }
+        coVerify { printerPreferences.clearPrinter() }
+        assertNull(repository.getSelectedPrinter())
     }
 }
