@@ -185,6 +185,14 @@ class PrinterSettingsViewModel @Inject constructor(
         _transient.update { it.copy(message = null) }
     }
 
+    fun onBluetoothPermissionDenied() {
+        _transient.update {
+            it.copy(
+                message = "Permiso de dispositivos cercanos requerido para impresoras Bluetooth.",
+            )
+        }
+    }
+
     private data class TransientState(
         val discoveredPrinters: List<PrinterInfo> = emptyList(),
         val isDiscovering: Boolean = false,

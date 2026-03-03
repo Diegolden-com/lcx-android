@@ -1,5 +1,11 @@
 package com.cleanx.lcx.feature.printing.ui
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
@@ -27,12 +33,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cleanx.lcx.core.theme.LcxSpacing
@@ -40,15 +48,42 @@ import com.cleanx.lcx.core.theme.LcxSuccess
 import com.cleanx.lcx.core.ui.ButtonVariant
 import com.cleanx.lcx.core.ui.LcxButton
 import com.cleanx.lcx.core.ui.LoadingOverlay
+import com.cleanx.lcx.feature.printing.data.ConnectionType
+import com.cleanx.lcx.feature.printing.data.LabelData
 import com.cleanx.lcx.feature.printing.data.PrinterInfo
 
 @Composable
 fun PrintScreen(
     onFinished: () -> Unit,
+    initialLabelData: LabelData? = null,
     viewModel: PrintViewModel = hiltViewModel(),
 ) {
     val state = viewModel.uiState.collectAsStateWithLifecycle().value
     val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
+
+    var pendingAutoDiscover by remember { mutableStateOf(false) }
+    var pendingPrinterSelection by remember { mutableStateOf<PrinterInfo?>(null) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            val printer = pendingPrinterSelection
+            when {
+                printer != null -> viewModel.selectPrinter(printer)
+                pendingAutoDiscover -> viewModel.discoverPrinters()
+            }
+        } else {
+            viewModel.onBluetoothPermissionDenied()
+        }
+        pendingAutoDiscover = false
+        pendingPrinterSelection = null
+    }
+
+    // Ensure label payload is available before connecting/printing.
+    LaunchedEffect(initialLabelData) {
+        initialLabelData?.let(viewModel::setLabelData)
+    }
 
     // Navigate away once the flow is complete (skip or success acknowledged).
     LaunchedEffect(state.finished) {
@@ -58,7 +93,12 @@ fun PrintScreen(
     // Auto-start discovery on first composition.
     LaunchedEffect(Unit) {
         if (state.phase == PrintPhase.IDLE && !state.finished) {
-            viewModel.discoverPrinters()
+            if (needsBluetoothPermission() && !hasBluetoothConnectPermission(context)) {
+                pendingAutoDiscover = true
+                permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+            } else {
+                viewModel.discoverPrinters()
+            }
         }
     }
 
@@ -89,7 +129,18 @@ fun PrintScreen(
 
                 PrintPhase.SELECTING -> SelectingContent(
                     printers = state.printers,
-                    onSelect = viewModel::selectPrinter,
+                    onSelect = { printer ->
+                        val requiresPermission =
+                            printer.connectionType == ConnectionType.BLUETOOTH &&
+                                needsBluetoothPermission() &&
+                                !hasBluetoothConnectPermission(context)
+                        if (requiresPermission) {
+                            pendingPrinterSelection = printer
+                            permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                        } else {
+                            viewModel.selectPrinter(printer)
+                        }
+                    },
                     onSkip = viewModel::skip,
                 )
 
@@ -268,4 +319,14 @@ private fun mapPrintErrorToUserMessage(raw: String): String {
             "No se encontraron impresoras. Verifique que la impresora esta encendida."
         else -> raw
     }
+}
+
+private fun needsBluetoothPermission(): Boolean =
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+private fun hasBluetoothConnectPermission(context: Context): Boolean {
+    return ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.BLUETOOTH_CONNECT,
+    ) == PackageManager.PERMISSION_GRANTED
 }

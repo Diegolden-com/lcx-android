@@ -12,11 +12,15 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.cleanx.lcx.core.transaction.ui.TransactionScreen
+import com.cleanx.lcx.core.model.ServiceType
+import com.cleanx.lcx.core.model.Ticket
 import com.cleanx.lcx.feature.auth.ui.LoginScreen
 import com.cleanx.lcx.BuildConfig
 import com.cleanx.lcx.feature.payments.ui.ChargeScreen
 import com.cleanx.lcx.feature.payments.ui.PaymentDiagnosticsScreen
+import com.cleanx.lcx.feature.printing.data.LabelData
 import com.cleanx.lcx.feature.printing.ui.PrintScreen
+import com.cleanx.lcx.feature.printing.ui.PrintViewModel
 import com.cleanx.lcx.feature.tickets.ui.create.CreateTicketScreen
 import com.cleanx.lcx.feature.tickets.ui.create.CreateTicketViewModel
 import com.cleanx.lcx.feature.tickets.ui.detail.TicketDetailScreen
@@ -142,7 +146,16 @@ fun LcxNavHost() {
         }
 
         composable<Screen.Print> {
+            val printViewModel: PrintViewModel = hiltViewModel()
+            val ticketId = printViewModel.ticketId
+            val initialLabelData = remember(ticketId, ticketListViewModel.uiState.value.tickets) {
+                ticketListViewModel.uiState.value.tickets
+                    .firstOrNull { it.id == ticketId }
+                    ?.toLabelData()
+            }
             PrintScreen(
+                initialLabelData = initialLabelData,
+                viewModel = printViewModel,
                 onFinished = {
                     navController.popBackStack()
                 },
@@ -173,4 +186,18 @@ fun LcxNavHost() {
             }
         }
     }
+}
+
+private fun Ticket.toLabelData(): LabelData {
+    val serviceTypeLabel = when (serviceType) {
+        ServiceType.IN_STORE -> "En tienda"
+        ServiceType.WASH_FOLD -> "Lavado y doblado"
+    }
+    return LabelData(
+        ticketNumber = ticketNumber,
+        customerName = customerName,
+        serviceType = service?.takeIf { it.isNotBlank() } ?: serviceTypeLabel,
+        date = ticketDate,
+        dailyFolio = dailyFolio,
+    )
 }

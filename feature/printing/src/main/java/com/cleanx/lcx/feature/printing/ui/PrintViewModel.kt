@@ -49,7 +49,7 @@ class PrintViewModel @Inject constructor(
     val uiState: StateFlow<PrintUiState> = _uiState.asStateFlow()
 
     // Navigation argument — the ticketId is embedded in the route by LcxNavHost.
-    private val ticketId: String = savedStateHandle["ticketId"] ?: ""
+    val ticketId: String = savedStateHandle["ticketId"] ?: ""
 
     // Label data is set externally before printing (from the ticket detail).
     private var labelData: LabelData? = null
@@ -108,6 +108,15 @@ class PrintViewModel @Inject constructor(
     fun skip() {
         printRepository.disconnect()
         _uiState.update { it.copy(phase = PrintPhase.IDLE, finished = true) }
+    }
+
+    fun onBluetoothPermissionDenied() {
+        _uiState.update {
+            it.copy(
+                phase = PrintPhase.ERROR,
+                errorMessage = "Permiso de dispositivos cercanos requerido para impresoras Bluetooth.",
+            )
+        }
     }
 
     // -- Private helpers ------------------------------------------------------
