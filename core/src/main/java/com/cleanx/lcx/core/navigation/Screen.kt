@@ -15,4 +15,20 @@ sealed interface Screen {
     @Serializable data class Print(val ticketId: String) : Screen
     @Serializable data object Transaction : Screen
     @Serializable data object PaymentDiagnostics : Screen
+
+    // ── Bottom-nav tab root screens ───────────────────────────────────
+    @Serializable data object Dashboard : Screen
+    @Serializable data object Water : Screen
+    @Serializable data object Checklist : Screen
+    @Serializable data object More : Screen
+
+    // ── Tab graph route markers (used as nested-graph routes) ─────────
+    @Serializable data object DashboardGraph : Screen
+    @Serializable data object TicketsGraph : Screen
+    @Serializable data object WaterGraph : Screen
+    @Serializable data object ChecklistGraph : Screen
+    @Serializable data object MoreGraph : Screen
+
+    // ── Main shell (post-login) ──────────────────────────────────────
+    @Serializable data object Main : Screen
 }
