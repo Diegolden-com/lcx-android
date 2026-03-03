@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Assessment
@@ -18,7 +19,6 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Inventory2
-import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.ReportProblem
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Warning
@@ -246,7 +246,7 @@ fun SuppliesLabelsShell(onBack: () -> Unit, modifier: Modifier = Modifier) {
     OperatorShellScreen(
         title = "Etiquetas",
         description = "Imprimir etiquetas de insumos",
-        icon = Icons.Filled.Label,
+        icon = Icons.AutoMirrored.Filled.Label,
         onBack = onBack,
         modifier = modifier,
     )
