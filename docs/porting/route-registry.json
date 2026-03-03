@@ -94,9 +94,9 @@
       "section": "operador",
       "roles": ["employee", "manager", "superadmin"],
       "public": false,
-      "route_present": true,
+      "route_present": false,
       "parity_done": false,
-      "notes": "within Cash tab"
+      "notes": "screen contract exists but no composable route wiring yet"
     },
     {
       "id": "op-caja-historial",
@@ -105,20 +105,20 @@
       "section": "operador",
       "roles": ["employee", "manager", "superadmin"],
       "public": false,
-      "route_present": true,
+      "route_present": false,
       "parity_done": false,
-      "notes": "within Cash tab"
+      "notes": "screen contract exists but no composable route wiring yet"
     },
     {
       "id": "op-checklist-entrada",
       "pwa_path": "/operador/checklist/entrada",
-      "android_screen": "Screen.Checklist",
+      "android_screen": null,
       "section": "operador",
       "roles": ["employee", "manager", "superadmin"],
       "public": false,
       "route_present": false,
       "parity_done": false,
-      "notes": "no dedicated route, only placeholder tab"
+      "notes": "no dedicated route yet; only generic Checklist tab"
     },
     {
       "id": "op-checklist-salida",
