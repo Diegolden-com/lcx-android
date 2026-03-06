@@ -1,5 +1,6 @@
 package com.cleanx.lcx.feature.auth.data
 
+import com.cleanx.lcx.core.config.BuildConfigProvider
 import com.cleanx.lcx.core.model.UserRole
 import com.cleanx.lcx.core.session.SessionManager
 import io.github.jan.supabase.SupabaseClient
@@ -8,6 +9,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import timber.log.Timber
+import java.util.Base64
+import java.net.URI
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,6 +33,7 @@ class AuthRepository @Inject constructor(
     private val authApi: AuthApi,
     private val sessionManager: SessionManager,
     private val supabaseClient: SupabaseClient,
+    private val config: BuildConfigProvider,
     private val json: Json,
 ) {
 
@@ -41,7 +45,9 @@ class AuthRepository @Inject constructor(
                 val body = response.body()
                 if (body != null) {
                     val userId = body.user?.id ?: body.userId ?: ""
+                    val userEmail = body.user?.email?.takeIf { it.isNotBlank() } ?: email
                     sessionManager.saveAccessToken(body.accessToken)
+                    sessionManager.saveUserEmail(userEmail)
 
                     // Fetch and persist the user role from the profiles table.
                     fetchAndSaveUserRole(userId)
@@ -79,7 +85,34 @@ class AuthRepository @Inject constructor(
     }
 
     fun isAuthenticated(): Boolean {
-        return !sessionManager.getAccessToken().isNullOrBlank()
+        val token = sessionManager.getAccessToken()
+        if (token.isNullOrBlank()) return false
+
+        val tokenIssuerHost = token.issuerHostOrNull()
+        val configuredHost = runCatching { URI(config.supabaseUrl).host.orEmpty() }
+            .getOrNull()
+            .orEmpty()
+        if (configuredHost.isBlank()) {
+            Timber.tag("AUTH").w("Invalid supabase host in config. Forcing re-login.")
+            return false
+        }
+
+        // JWT format with no parseable issuer is treated as invalid/stale.
+        if (token.count { it == '.' } >= 2 && tokenIssuerHost == null) {
+            Timber.tag("AUTH").w("JWT without parseable issuer. Forcing re-login.")
+            return false
+        }
+
+        if (tokenIssuerHost != null && tokenIssuerHost != configuredHost) {
+            Timber.tag("AUTH").w(
+                "Token issuer mismatch; tokenHost=%s configuredHost=%s. Forcing re-login.",
+                tokenIssuerHost,
+                configuredHost,
+            )
+            return false
+        }
+
+        return true
     }
 
     fun getCurrentUserId(): String? {
@@ -108,4 +141,19 @@ class AuthRepository @Inject constructor(
             sessionManager.saveUserRole(UserRole.EMPLOYEE)
         }
     }
+}
+
+private fun String.issuerHostOrNull(): String? {
+    return runCatching {
+        val parts = split('.')
+        if (parts.size < 2) return null
+        val payloadBase64Url = parts[1]
+        val padded = payloadBase64Url + "=".repeat((4 - payloadBase64Url.length % 4) % 4)
+        val payloadJson = String(Base64.getUrlDecoder().decode(padded))
+        val iss = Regex("\"iss\"\\s*:\\s*\"([^\"]+)\"")
+            .find(payloadJson)
+            ?.groupValues
+            ?.getOrNull(1)
+        iss?.let { runCatching { URI(it).host }.getOrNull() }
+    }.getOrNull()
 }

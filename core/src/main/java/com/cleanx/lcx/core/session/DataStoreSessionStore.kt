@@ -51,6 +51,22 @@ class DataStoreSessionStore @Inject constructor(
         }
     }
 
+    override fun getUserEmail(): String? = runBlocking {
+        observeUserEmail().first()
+    }
+
+    override fun observeUserEmail(): Flow<String?> {
+        return sessionPreferencesFlow().map { preferences ->
+            preferences[USER_EMAIL]?.takeIf { it.isNotBlank() }
+        }
+    }
+
+    override suspend fun saveUserEmail(email: String) {
+        context.sessionDataStore.edit { preferences ->
+            preferences[USER_EMAIL] = email.trim()
+        }
+    }
+
     override suspend fun saveUserRole(role: UserRole) {
         context.sessionDataStore.edit { preferences ->
             preferences[USER_ROLE] = role.name.lowercase()
@@ -61,12 +77,14 @@ class DataStoreSessionStore @Inject constructor(
         context.sessionDataStore.edit { preferences: MutablePreferences ->
             preferences.remove(ACCESS_TOKEN)
             preferences.remove(USER_ROLE)
+            preferences.remove(USER_EMAIL)
         }
     }
 
     private companion object {
         val ACCESS_TOKEN: Preferences.Key<String> = stringPreferencesKey("access_token")
         val USER_ROLE: Preferences.Key<String> = stringPreferencesKey("user_role")
+        val USER_EMAIL: Preferences.Key<String> = stringPreferencesKey("user_email")
     }
 
     private fun sessionPreferencesFlow(): Flow<Preferences> {

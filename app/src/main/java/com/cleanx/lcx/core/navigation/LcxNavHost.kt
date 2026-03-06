@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -13,6 +14,7 @@ import com.cleanx.lcx.core.network.SessionExpiredInterceptor
 import com.cleanx.lcx.core.session.SessionManager
 import com.cleanx.lcx.feature.auth.ui.LoginScreen
 import com.cleanx.lcx.ui.shell.MainScaffold
+import kotlinx.coroutines.launch
 import timber.log.Timber
 
 private const val NAV_ANIM_DURATION = 300
@@ -35,6 +37,7 @@ fun LcxNavHost(
     sessionManager: SessionManager? = null,
 ) {
     val rootNavController = rememberNavController()
+    val scope = rememberCoroutineScope()
 
     // Global 401 handler: clear session and redirect to Login when session expires.
     if (sessionExpiredInterceptor != null) {
@@ -100,9 +103,12 @@ fun LcxNavHost(
         ) {
             MainScaffold(
                 onSignOut = {
-                    rootNavController.navigate(Screen.Login) {
-                        popUpTo<Screen.Main> { inclusive = true }
-                        launchSingleTop = true
+                    scope.launch {
+                        sessionManager?.clearSession()
+                        rootNavController.navigate(Screen.Login) {
+                            popUpTo<Screen.Main> { inclusive = true }
+                            launchSingleTop = true
+                        }
                     }
                 },
             )

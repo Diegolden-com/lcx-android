@@ -1,5 +1,6 @@
 package com.cleanx.lcx.feature.auth.data
 
+import com.cleanx.lcx.core.config.BuildConfigProvider
 import com.cleanx.lcx.core.session.SessionManager
 import io.github.jan.supabase.SupabaseClient
 import io.mockk.coEvery
@@ -22,6 +23,7 @@ class AuthRepositoryTest {
     private lateinit var authApi: AuthApi
     private lateinit var sessionManager: SessionManager
     private lateinit var supabaseClient: SupabaseClient
+    private lateinit var config: BuildConfigProvider
     private lateinit var repository: AuthRepository
     private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
 
@@ -30,7 +32,9 @@ class AuthRepositoryTest {
         authApi = mockk()
         sessionManager = mockk(relaxUnitFun = true)
         supabaseClient = mockk(relaxed = true)
-        repository = AuthRepository(authApi, sessionManager, supabaseClient, json)
+        config = mockk()
+        every { config.supabaseUrl } returns "https://olheihdjfhzgrdpmylvh.supabase.co"
+        repository = AuthRepository(authApi, sessionManager, supabaseClient, config, json)
     }
 
     // -- Sign in success stores token --
@@ -135,6 +139,22 @@ class AuthRepositoryTest {
         assertFalse(repository.isAuthenticated())
     }
 
+    @Test
+    fun `isAuthenticated returns false when JWT issuer host mismatches configured supabase host`() {
+        val mismatchedToken = buildJwtWithIssuer("http://127.0.0.1:54321/auth/v1")
+        every { sessionManager.getAccessToken() } returns mismatchedToken
+
+        assertFalse(repository.isAuthenticated())
+    }
+
+    @Test
+    fun `isAuthenticated returns true when JWT issuer host matches configured supabase host`() {
+        val matchingToken = buildJwtWithIssuer("https://olheihdjfhzgrdpmylvh.supabase.co/auth/v1")
+        every { sessionManager.getAccessToken() } returns matchingToken
+
+        assertTrue(repository.isAuthenticated())
+    }
+
     // -- Error with unparseable body --
 
     @Test
@@ -147,5 +167,17 @@ class AuthRepositoryTest {
 
         assertTrue(result is AuthResult.Error)
         assertEquals("Credenciales invalidas.", (result as AuthResult.Error).message)
+    }
+
+    private fun buildJwtWithIssuer(iss: String): String {
+        val header = """{"alg":"none","typ":"JWT"}"""
+        val payload = """{"iss":"$iss"}"""
+        return "${base64Url(header)}.${base64Url(payload)}."
+    }
+
+    private fun base64Url(raw: String): String {
+        return java.util.Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(raw.toByteArray())
     }
 }
