@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
@@ -60,6 +59,9 @@ import com.cleanx.lcx.feature.tickets.data.AddOnCatalogRecord
 import com.cleanx.lcx.feature.tickets.data.CustomerRecord
 import com.cleanx.lcx.feature.tickets.data.InventoryCatalogRecord
 import com.cleanx.lcx.feature.tickets.data.ServiceCatalogRecord
+import com.cleanx.lcx.feature.tickets.domain.create.CreateTicketUiState
+import com.cleanx.lcx.feature.tickets.domain.create.CustomerPickerUiState
+import com.cleanx.lcx.feature.tickets.domain.create.EncargoPaymentChoice
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
