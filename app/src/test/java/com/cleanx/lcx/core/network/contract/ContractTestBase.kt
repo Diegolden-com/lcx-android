@@ -1,7 +1,12 @@
 package com.cleanx.lcx.core.network.contract
 
 import com.cleanx.lcx.core.network.TicketApi
+import com.cleanx.lcx.core.network.SmsNotificationClient
+import com.cleanx.lcx.core.network.SmsNotificationResult
+import com.cleanx.lcx.core.network.SupabaseTableClient
 import com.cleanx.lcx.feature.tickets.data.TicketRepository
+import io.mockk.coEvery
+import io.mockk.mockk
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -21,6 +26,8 @@ abstract class ContractTestBase {
 
     protected lateinit var server: MockWebServer
     protected lateinit var api: TicketApi
+    protected lateinit var smsNotificationClient: SmsNotificationClient
+    protected lateinit var supabase: SupabaseTableClient
     protected lateinit var repository: TicketRepository
     protected val json: Json = Json {
         ignoreUnknownKeys = true
@@ -43,7 +50,12 @@ abstract class ContractTestBase {
             .build()
 
         api = retrofit.create(TicketApi::class.java)
-        repository = TicketRepository(api, json)
+        smsNotificationClient = mockk()
+        supabase = mockk(relaxed = true)
+        coEvery {
+            smsNotificationClient.sendTicketReadyPickup(any(), any(), any(), any())
+        } returns SmsNotificationResult.Skipped
+        repository = TicketRepository(api, json, smsNotificationClient, supabase)
     }
 
     @After

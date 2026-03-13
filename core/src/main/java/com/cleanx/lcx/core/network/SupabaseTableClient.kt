@@ -187,6 +187,18 @@ class SupabaseTableClient @Inject constructor(
         }.decodeList<T>()
     }
 
+    /**
+     * Insert multiple payload rows of type [I] and decode the inserted rows as [O].
+     */
+    suspend inline fun <reified I : Any, reified O : Any> insertManyReturning(
+        table: String,
+        values: List<I>,
+    ): Result<List<O>> = runCatching(table, "insertManyReturning") {
+        client.from(table).insert(values) {
+            select()
+        }.decodeList<O>()
+    }
+
     // -- UPDATE ---------------------------------------------------------------
 
     /**
@@ -201,6 +213,21 @@ class SupabaseTableClient @Inject constructor(
             select()
             filter(filterBlock)
         }.decodeList<T>()
+    }
+
+    /**
+     * Update rows in [table] with payload [I] and decode the updated rows as [O].
+     * Useful when the patch payload is partial but the caller needs full row models.
+     */
+    suspend inline fun <reified I : Any, reified O : Any> updateReturning(
+        table: String,
+        value: I,
+        noinline filterBlock: PostgrestFilterBuilder.() -> Unit,
+    ): Result<List<O>> = runCatching(table, "updateReturning") {
+        client.from(table).update(value) {
+            select()
+            filter(filterBlock)
+        }.decodeList<O>()
     }
 
     // -- DELETE ---------------------------------------------------------------

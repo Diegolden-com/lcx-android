@@ -19,6 +19,7 @@ data class CreateTicketsRequest(
 data class TicketDraft(
     @SerialName("customer_name") val customerName: String,
     @SerialName("customer_phone") val customerPhone: String? = null,
+    @SerialName("customer_email") val customerEmail: String? = null,
     @SerialName("customer_id") val customerId: String? = null,
     @SerialName("service_type") val serviceType: String,
     val service: String,
@@ -26,9 +27,18 @@ data class TicketDraft(
     val status: String? = null,
     val notes: String? = null,
     @SerialName("total_amount") val totalAmount: Double? = null,
+    val subtotal: Double? = null,
+    @SerialName("add_ons_total") val addOnsTotal: Double? = null,
+    @SerialName("add_ons") val addOns: List<String>? = null,
+    @SerialName("promised_pickup_date") val promisedPickupDate: String? = null,
+    @SerialName("actual_pickup_date") val actualPickupDate: String? = null,
+    @SerialName("special_instructions") val specialInstructions: String? = null,
+    val photos: List<String>? = null,
     @SerialName("payment_method") val paymentMethod: String? = null,
     @SerialName("payment_status") val paymentStatus: String? = null,
     @SerialName("paid_amount") val paidAmount: Double? = null,
+    @SerialName("paid_at") val paidAt: String? = null,
+    @SerialName("prepaid_amount") val prepaidAmount: Double? = null,
 )
 
 @Serializable

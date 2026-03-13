@@ -8,12 +8,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
@@ -36,10 +36,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -71,25 +71,23 @@ fun CreateTicketScreen(
     val customerNameFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    var showSuccess by rememberSaveable { mutableStateOf(false) }
+    var showExitDialog by rememberSaveable { mutableStateOf(false) }
 
-    // Track whether we're showing the success state
-    var showSuccess by remember { mutableStateOf(false) }
-
-    // Track whether to show unsaved data confirmation dialog
-    var showExitDialog by remember { mutableStateOf(false) }
-
-    // Check if form has data entered
     val hasFormData = state.customerName.isNotBlank() ||
         state.customerPhone.isNotBlank() ||
         state.service.isNotBlank() ||
         state.weight.isNotBlank() ||
         state.notes.isNotBlank() ||
-        state.totalAmount.isNotBlank()
+        state.promisedPickupDate.isNotBlank() ||
+        state.specialInstructions.isNotBlank() ||
+        state.addOns.isNotBlank() ||
+        state.addOnsTotal.isNotBlank() ||
+        state.totalAmount.isNotBlank() ||
+        state.paidAmount.isNotBlank()
 
-    // Handle back navigation with confirmation
     val handleBack = {
         if (showSuccess) {
-            // During success display, just navigate away
             onNavigateBack()
         } else if (hasFormData && !state.isSubmitting) {
             showExitDialog = true
@@ -102,24 +100,19 @@ fun CreateTicketScreen(
         handleBack()
     }
 
-    // On ticket created: show success, then auto-navigate after delay
     LaunchedEffect(state.createdTicket) {
-        val ticket = state.createdTicket
-        if (ticket != null) {
-            onTicketCreated(ticket)
-            showSuccess = true
-            viewModel.clearCreated()
-            delay(2000)
-            onNavigateBack()
-        }
+        val ticket = state.createdTicket ?: return@LaunchedEffect
+        showSuccess = true
+        keyboardController?.hide()
+        delay(1200)
+        viewModel.clearCreated()
+        onTicketCreated(ticket)
     }
 
-    // Auto-focus on first field
     LaunchedEffect(Unit) {
         customerNameFocusRequester.requestFocus()
     }
 
-    // Exit confirmation dialog
     if (showExitDialog) {
         LcxConfirmationDialog(
             title = "Datos sin guardar",
@@ -140,7 +133,7 @@ fun CreateTicketScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Nuevo Ticket",
+                        "Nuevo encargo",
                         modifier = Modifier.semantics { heading() },
                     )
                 },
@@ -153,7 +146,6 @@ fun CreateTicketScreen(
         },
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
-            // Main form content
             AnimatedVisibility(
                 visible = !showSuccess,
                 enter = fadeIn(),
@@ -237,9 +229,67 @@ fun CreateTicketScreen(
                         LcxTextField(
                             value = state.notes,
                             onValueChange = viewModel::onNotesChanged,
-                            label = "Notas",
+                            label = "Notas internas",
                             singleLine = false,
                             maxLines = 3,
+                            enabled = !state.isSubmitting,
+                            imeAction = ImeAction.Next,
+                            keyboardActions = KeyboardActions(
+                                onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                            ),
+                        )
+                    }
+
+                    LcxCard(title = "Entrega y extras") {
+                        LcxTextField(
+                            value = state.promisedPickupDate,
+                            onValueChange = viewModel::onPromisedPickupDateChanged,
+                            label = "Fecha promesa (AAAA-MM-DD)",
+                            enabled = !state.isSubmitting,
+                            imeAction = ImeAction.Next,
+                            keyboardActions = KeyboardActions(
+                                onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                            ),
+                        )
+
+                        Spacer(modifier = Modifier.height(LcxSpacing.sm))
+
+                        LcxTextField(
+                            value = state.specialInstructions,
+                            onValueChange = viewModel::onSpecialInstructionsChanged,
+                            label = "Indicaciones especiales",
+                            singleLine = false,
+                            maxLines = 3,
+                            enabled = !state.isSubmitting,
+                            imeAction = ImeAction.Next,
+                            keyboardActions = KeyboardActions(
+                                onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                            ),
+                        )
+
+                        Spacer(modifier = Modifier.height(LcxSpacing.sm))
+
+                        LcxTextField(
+                            value = state.addOns,
+                            onValueChange = viewModel::onAddOnsChanged,
+                            label = "Add-ons (separados por coma)",
+                            singleLine = false,
+                            maxLines = 2,
+                            enabled = !state.isSubmitting,
+                            imeAction = ImeAction.Next,
+                            keyboardActions = KeyboardActions(
+                                onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                            ),
+                        )
+
+                        Spacer(modifier = Modifier.height(LcxSpacing.sm))
+
+                        LcxTextField(
+                            value = state.addOnsTotal,
+                            onValueChange = viewModel::onAddOnsTotalChanged,
+                            label = "Monto add-ons",
+                            keyboardType = KeyboardType.Decimal,
+                            prefix = { Text("$") },
                             enabled = !state.isSubmitting,
                             imeAction = ImeAction.Next,
                             keyboardActions = KeyboardActions(
@@ -256,19 +306,62 @@ fun CreateTicketScreen(
                             keyboardType = KeyboardType.Decimal,
                             prefix = { Text("$") },
                             enabled = !state.isSubmitting,
-                            error = state.error,
-                            imeAction = ImeAction.Done,
+                            imeAction = ImeAction.Next,
                             keyboardActions = KeyboardActions(
-                                onDone = {
-                                    keyboardController?.hide()
-                                    viewModel.submit()
-                                },
+                                onNext = { focusManager.moveFocus(FocusDirection.Down) },
                             ),
                         )
+
+                        Spacer(modifier = Modifier.height(LcxSpacing.sm))
+
+                        PaymentStatusDropdown(
+                            selected = state.paymentStatus,
+                            onSelected = viewModel::onPaymentStatusChanged,
+                            enabled = !state.isSubmitting,
+                        )
+
+                        if (state.paymentStatus != "pending") {
+                            Spacer(modifier = Modifier.height(LcxSpacing.sm))
+
+                            PaymentMethodDropdown(
+                                selected = state.paymentMethod,
+                                onSelected = viewModel::onPaymentMethodChanged,
+                                enabled = !state.isSubmitting,
+                            )
+
+                            Spacer(modifier = Modifier.height(LcxSpacing.sm))
+
+                            LcxTextField(
+                                value = state.paidAmount,
+                                onValueChange = viewModel::onPaidAmountChanged,
+                                label = if (state.paymentStatus == "prepaid") {
+                                    "Anticipo pagado"
+                                } else {
+                                    "Monto pagado"
+                                },
+                                keyboardType = KeyboardType.Decimal,
+                                prefix = { Text("$") },
+                                enabled = !state.isSubmitting,
+                                imeAction = ImeAction.Next,
+                                keyboardActions = KeyboardActions(
+                                    onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                                ),
+                            )
+                        }
+                    }
+
+                    state.error?.let { error ->
+                        LcxCard {
+                            Text(
+                                text = error,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
                     }
 
                     LcxButton(
-                        text = if (state.isSubmitting) "Creando..." else "Crear Ticket",
+                        text = if (state.isSubmitting) "Creando..." else "Crear encargo",
                         onClick = {
                             keyboardController?.hide()
                             viewModel.submit()
@@ -282,7 +375,6 @@ fun CreateTicketScreen(
                 }
             }
 
-            // Success overlay
             AnimatedVisibility(
                 visible = showSuccess,
                 enter = fadeIn(),
@@ -303,7 +395,7 @@ fun CreateTicketScreen(
                     )
                     Spacer(modifier = Modifier.height(LcxSpacing.md))
                     Text(
-                        text = "Ticket creado exitosamente",
+                        text = "Encargo creado exitosamente",
                         style = MaterialTheme.typography.headlineSmall,
                         color = LcxSuccess,
                     )
@@ -320,8 +412,68 @@ private fun ServiceTypeDropdown(
     onSelected: (String) -> Unit,
     enabled: Boolean,
 ) {
+    DropdownField(
+        selected = selected,
+        label = "Tipo de servicio",
+        enabled = enabled,
+        options = listOf(
+            "wash-fold" to "Lavado y Doblado",
+            "in-store" to "En tienda",
+        ),
+        onSelected = onSelected,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PaymentStatusDropdown(
+    selected: String,
+    onSelected: (String) -> Unit,
+    enabled: Boolean,
+) {
+    DropdownField(
+        selected = selected,
+        label = "Estado de pago al crear",
+        enabled = enabled,
+        options = listOf(
+            "pending" to "Pendiente",
+            "prepaid" to "Anticipo",
+            "paid" to "Pagado",
+        ),
+        onSelected = onSelected,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PaymentMethodDropdown(
+    selected: String,
+    onSelected: (String) -> Unit,
+    enabled: Boolean,
+) {
+    DropdownField(
+        selected = selected,
+        label = "Método de pago",
+        enabled = enabled,
+        options = listOf(
+            "card" to "Tarjeta",
+            "cash" to "Efectivo",
+            "transfer" to "Transferencia",
+        ),
+        onSelected = onSelected,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DropdownField(
+    selected: String,
+    label: String,
+    enabled: Boolean,
+    options: List<Pair<String, String>>,
+    onSelected: (String) -> Unit,
+) {
     var expanded by remember { mutableStateOf(false) }
-    val options = listOf("wash-fold" to "Lavado y Doblado", "in-store" to "En tienda")
     val selectedLabel = options.firstOrNull { it.first == selected }?.second ?: selected
 
     ExposedDropdownMenuBox(
@@ -331,7 +483,7 @@ private fun ServiceTypeDropdown(
         LcxTextField(
             value = selectedLabel,
             onValueChange = {},
-            label = "Tipo de servicio",
+            label = label,
             readOnly = true,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
@@ -343,9 +495,9 @@ private fun ServiceTypeDropdown(
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {
-            options.forEach { (value, label) ->
+            options.forEach { (value, optionLabel) ->
                 DropdownMenuItem(
-                    text = { Text(label) },
+                    text = { Text(optionLabel) },
                     onClick = {
                         onSelected(value)
                         expanded = false

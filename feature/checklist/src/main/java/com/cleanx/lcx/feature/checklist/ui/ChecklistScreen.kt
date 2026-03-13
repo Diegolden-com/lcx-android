@@ -41,8 +41,8 @@ import com.cleanx.lcx.core.ui.EmptyState
 import com.cleanx.lcx.core.ui.ErrorState
 import com.cleanx.lcx.core.ui.LcxCard
 import com.cleanx.lcx.feature.checklist.data.Checklist
-import com.cleanx.lcx.feature.checklist.data.ChecklistStatus
 import com.cleanx.lcx.feature.checklist.data.ChecklistType
+import com.cleanx.lcx.feature.checklist.data.resolvedType
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -55,9 +55,14 @@ fun ChecklistScreen(
     viewModel: ChecklistViewModel,
     onNavigateToWater: (() -> Unit)? = null,
     onNavigateToCash: (() -> Unit)? = null,
+    showTopBar: Boolean = true,
 ) {
     val state by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        viewModel.refreshSelectedTab()
+    }
 
     // Show completed message as snackbar
     LaunchedEffect(state.completedMessage) {
@@ -69,14 +74,16 @@ fun ChecklistScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Checklist operativo",
-                        modifier = Modifier.semantics { heading() },
-                    )
-                },
-            )
+            if (showTopBar) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "Checklist operativo",
+                            modifier = Modifier.semantics { heading() },
+                        )
+                    },
+                )
+            }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
@@ -138,6 +145,12 @@ fun ChecklistScreen(
                     onNotesChanged = { viewModel.updateNotes(it, ChecklistType.SALIDA) },
                     onComplete = { viewModel.completeChecklist(ChecklistType.SALIDA) },
                     onRetry = { viewModel.loadExitChecklist() },
+                    onActionClick = { route ->
+                        when (route) {
+                            "water" -> onNavigateToWater?.invoke()
+                            "cash" -> onNavigateToCash?.invoke()
+                        }
+                    },
                 )
 
                 2 -> HistoryContent(
@@ -205,11 +218,12 @@ private fun HistoryContent(
 
 @Composable
 private fun HistoryItem(checklist: Checklist) {
-    val typeLabel = when (checklist.type) {
+    val resolvedType = checklist.resolvedType()
+    val typeLabel = when (resolvedType) {
         ChecklistType.ENTRADA -> "Entrada"
         ChecklistType.SALIDA -> "Salida"
     }
-    val typeColor = when (checklist.type) {
+    val typeColor = when (resolvedType) {
         ChecklistType.ENTRADA -> Color(0xFF1A73E8) // Blue
         ChecklistType.SALIDA -> Color(0xFFE8710A) // Orange
     }
@@ -267,10 +281,10 @@ private fun HistoryItem(checklist: Checklist) {
                 }
 
                 // Notes
-                if (!checklist.notes.isNullOrBlank()) {
+                if (!checklist.completionNotes.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(LcxSpacing.xs))
                     Text(
-                        text = checklist.notes,
+                        text = checklist.completionNotes,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,

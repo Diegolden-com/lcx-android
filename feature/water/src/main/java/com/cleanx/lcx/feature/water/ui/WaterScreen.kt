@@ -27,19 +27,22 @@ private val TABS = listOf("Nivel Actual", "Historial")
 fun WaterScreen(
     viewModel: WaterViewModel,
     modifier: Modifier = Modifier,
+    showTopBar: Boolean = true,
 ) {
     val state by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Nivel de Agua",
-                        modifier = Modifier.semantics { heading() },
-                    )
-                },
-            )
+            if (showTopBar) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "Nivel de Agua",
+                            modifier = Modifier.semantics { heading() },
+                        )
+                    },
+                )
+            }
         },
         modifier = modifier,
     ) { padding ->

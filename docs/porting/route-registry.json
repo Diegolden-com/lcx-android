@@ -1,7 +1,7 @@
 {
   "$schema": "route-registry-v1",
   "description": "Canonical PWA -> Android route map. Single source of truth for parity verification.",
-  "generated": "2026-03-03",
+  "generated": "2026-03-13",
   "pwa_repo": "/Users/diegolden/Code/LCX/v0-lcx-pwa",
   "android_repo": "/Users/diegolden/Code/LCX/lcx-android",
   "routes": [
@@ -85,60 +85,62 @@
       "public": false,
       "route_present": true,
       "parity_done": false,
-      "notes": "placeholder tab"
+      "notes": "feature wired to Screen.Water; current scope resolves branch from the signed-in profile and persists recorded_by/branch on writes"
     },
     {
       "id": "op-caja-registrar",
       "pwa_path": "/operador/caja/registrar",
-      "android_screen": "Screen.CashRegister",
+      "android_screen": "Screen.Cash",
       "section": "operador",
       "roles": ["employee", "manager", "superadmin"],
       "public": false,
-      "route_present": false,
+      "route_present": true,
       "parity_done": false,
-      "notes": "screen contract exists but no composable route wiring yet"
+      "notes": "mapped to consolidated Cash screen/tab; Register lives in the Registrar tab, not a dedicated route"
     },
     {
       "id": "op-caja-historial",
       "pwa_path": "/operador/caja/historial",
-      "android_screen": "Screen.CashHistory",
+      "android_screen": "Screen.Cash",
       "section": "operador",
       "roles": ["employee", "manager", "superadmin"],
       "public": false,
-      "route_present": false,
+      "route_present": true,
       "parity_done": false,
-      "notes": "screen contract exists but no composable route wiring yet"
+      "notes": "mapped to consolidated Cash screen/tab; History lives in the Historial tab, not a dedicated route"
     },
     {
       "id": "op-checklist-entrada",
       "pwa_path": "/operador/checklist/entrada",
-      "android_screen": null,
+      "android_screen": "Screen.Checklist",
       "section": "operador",
       "roles": ["employee", "manager", "superadmin"],
       "public": false,
-      "route_present": false,
+      "route_present": true,
       "parity_done": false,
-      "notes": "no dedicated route yet; only generic Checklist tab"
+      "notes": "mapped to consolidated Checklist screen/tab; Entrada/Salida/Historial live as tabs and now use the real feature module"
     },
     {
       "id": "op-checklist-salida",
       "pwa_path": "/operador/checklist/salida",
-      "android_screen": null,
+      "android_screen": "Screen.Checklist",
       "section": "operador",
       "roles": ["employee", "manager", "superadmin"],
       "public": false,
-      "route_present": false,
-      "parity_done": false
+      "route_present": true,
+      "parity_done": false,
+      "notes": "mapped to consolidated Checklist screen/tab; Salida lives in the second tab and auto-validates cash closing"
     },
     {
       "id": "op-checklist-historial",
       "pwa_path": "/operador/checklist/historial",
-      "android_screen": null,
+      "android_screen": "Screen.Checklist",
       "section": "operador",
       "roles": ["employee", "manager", "superadmin"],
       "public": false,
-      "route_present": false,
-      "parity_done": false
+      "route_present": true,
+      "parity_done": false,
+      "notes": "mapped to consolidated Checklist screen/tab; Historial lives in the third tab"
     },
     {
       "id": "op-encargos-nuevo",
@@ -149,7 +151,7 @@
       "public": false,
       "route_present": true,
       "parity_done": false,
-      "notes": "missing customer picker, add-ons, pickup estimate"
+      "notes": "form now captures payment status/method/amount, promised pickup date, special instructions, and manual add-ons; still missing customer picker, catalog-backed pricing, inventory extras, and pickup estimate helpers"
     },
     {
       "id": "op-encargos-detail",
@@ -160,7 +162,7 @@
       "public": false,
       "route_present": true,
       "parity_done": false,
-      "notes": "missing quick actions, mark paid, extras"
+      "notes": "detail cold-loads from tickets, shows add-ons/promised pickup/special instructions, and opens native quick actions after create; still pending final manual parity smoke"
     },
     {
       "id": "op-encargos-activos",
@@ -170,7 +172,8 @@
       "roles": ["employee", "manager", "superadmin"],
       "public": false,
       "route_present": true,
-      "parity_done": false
+      "parity_done": true,
+      "notes": "accessible from Encargos home quick shortcuts; filter matches received + processing tickets"
     },
     {
       "id": "op-encargos-listos",
@@ -180,7 +183,8 @@
       "roles": ["employee", "manager", "superadmin"],
       "public": false,
       "route_present": true,
-      "parity_done": false
+      "parity_done": true,
+      "notes": "accessible from Encargos home quick shortcuts; filter matches ready tickets"
     },
     {
       "id": "op-encargos-completados",
@@ -190,7 +194,8 @@
       "roles": ["employee", "manager", "superadmin"],
       "public": false,
       "route_present": true,
-      "parity_done": false
+      "parity_done": true,
+      "notes": "accessible from Encargos home quick shortcuts; filter matches delivered tickets"
     },
     {
       "id": "op-encargos-todos",
@@ -200,7 +205,8 @@
       "roles": ["employee", "manager", "superadmin"],
       "public": false,
       "route_present": true,
-      "parity_done": false
+      "parity_done": true,
+      "notes": "accessible from Encargos home quick shortcuts; shows the same live ticket feed without hidden navigation"
     },
     {
       "id": "op-ventas",

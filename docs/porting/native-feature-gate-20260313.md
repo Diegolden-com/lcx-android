@@ -1,0 +1,543 @@
+# Android Native Feature Gate vs PWA
+
+Fecha de corte: 2026-03-13
+Workspace: `/Users/diegolden/Code/LCX`
+PWA source of truth: `/Users/diegolden/Code/LCX/v0-lcx-pwa`
+Android target: `/Users/diegolden/Code/LCX/lcx-android`
+
+## 1. Objetivo
+
+Convertir el inventario viejo de parity booleana en un gate operable por feature, con criterios de aceptacion verificables para cerrar la app nativa por iteraciones.
+
+Este documento responde una pregunta mas util que el snapshot 1:1 por ruta:
+
+- que falta para que Android pueda reemplazar al PWA en operacion real,
+- que ya existe en codigo pero aun no esta expuesto,
+- que puede cerrar como feature parity aunque la UX nativa no copie exactamente la navegacion web.
+
+## 2. Regla de cierre
+
+Una feature puede marcarse `DONE` aunque la UX nativa no replique exactamente la ruta del PWA, solo si conserva:
+
+1. descubribilidad desde la IA nativa,
+2. guardas de rol equivalentes,
+3. el mismo contrato de datos y side effects relevantes,
+4. las validaciones y bloqueos operativos del PWA,
+5. evidencia objetiva de build/test/smoke.
+
+Estados de trabajo usados por este gate:
+
+- `DONE`: reemplazo nativo aceptable del comportamiento PWA.
+- `PARTIAL`: expuesto y util, pero aun le faltan capacidades operativas.
+- `CODE_NOT_WIRED`: existe modulo o logica, pero la app aun expone placeholder o no lo conecta.
+- `SHELL`: navegacion o pantalla vacia sin logica de negocio.
+- `MISSING`: no existe implementacion util.
+
+## 3. Baseline real Android al 2026-03-13
+
+### 3.1 Expuesto y util hoy
+
+- Auth login.
+- Ticket list sobre `tickets` reales, con refresco y accesos discoverable a presets.
+- Ticket detail con carga en frio, quick actions nativas post-create, avance de estado, mark-as-paid, SMS, charge y print.
+- Ticket create ampliado con pago al crear, fecha promesa, indicaciones especiales y add-ons manuales.
+- Ticket preset screens (`active`, `ready`, `completed`, `all`) discoverable desde Encargos.
+- Flujo de charge + print + transaction orchestration.
+- Caja como tab funcional con registrar + historial.
+- Agua conectada al feature real, con scoping por `profile.branch` y persistencia de `recorded_by` / `branch`.
+- More hub y role guards operator/manager.
+
+### 3.2 Existe en codigo pero no esta conectado al producto real
+
+- Ninguno relevante en este corte.
+
+### 3.3 Expuesto solo como shell
+
+- Ventas.
+- Incidentes nuevo / historial.
+- Turnos control / historial / horario / reportes.
+- Ropa danada nuevo / historial.
+- Suministros inventario / etiquetas / reportes / brother-debug.
+- Vacaciones.
+- Calendario mensual / eventos.
+- Practicas.
+- Ayuda.
+
+### 3.4 Placeholder directo
+
+- Dashboard operador.
+
+### 3.5 Ausente
+
+- Signup / forgot password / reset password.
+- Profile.
+- Notifications.
+- Todo Admin.
+- Todo Gerencia.
+
+## 4. Observacion importante sobre medicion
+
+`scripts/porting/verify-parity.sh` sigue siendo util, pero hoy solo mide presencia de rutas declaradas. No alcanza para cerrar parity funcional.
+
+Limitaciones observadas:
+
+- No distingue entre ruta expuesta con UI real y ruta expuesta con placeholder.
+- No refleja bien que Caja ya es usable como feature consolidada, aunque no tenga deep links 1:1 para `registrar` e `historial`.
+- No captura `CODE_NOT_WIRED` para modulos que ya existen en `feature/*`.
+
+Decision de gate:
+
+- mantener `verify-parity.sh` como chequeo de route coverage,
+- usar este documento como fuente de verdad para feature parity.
+
+## 5. Gate G0 - Measurement Integrity
+
+Antes de cerrar varias features en paralelo, la medicion debe dejar de mentir.
+
+### G0.1 Registry y snapshot actualizados
+
+Estado actual: `NO`
+
+Done when:
+
+- `docs/porting/route-registry.json` refleja el estado real al 2026-03-13.
+- Caja deja de aparecer como "no route present" si la decision oficial es consolidarla en un solo screen/tab.
+- Agua y Checklist quedan marcados con su estado real (`PARTIAL`, `DONE`, etc.), no como placeholders ficticios.
+- Cada PR que cierre un gap actualiza este gate y el registry correspondiente.
+
+### G0.2 Taxonomia unica de estado
+
+Estado actual: `NO`
+
+Done when:
+
+- equipo usa solo `DONE`, `PARTIAL`, `CODE_NOT_WIRED`, `SHELL`, `MISSING`,
+- no se vuelve a mezclar "route present" con "feature done" en conversaciones de avance.
+
+## 6. Gate G1 - Operador Standalone
+
+Objetivo: un operador puede abrir, operar y cerrar turno completo sin fallback al PWA.
+
+### G1.1 Dashboard operador
+
+Estado actual: `MISSING` (placeholder)
+
+PWA refs:
+
+- `app/(authenticated)/operador/dashboard/page.tsx`
+
+Done when:
+
+- reemplaza el placeholder de `Screen.Dashboard`,
+- muestra quick actions a checklist entrada, agua, caja y nuevo encargo,
+- muestra rutina operativa del dia con estado de agua / caja / checklist,
+- muestra pendientes operativos minimos: tickets pendientes y necesidades de suministros,
+- respeta roles de operador.
+
+Evidence minima:
+
+- `./gradlew :app:assembleDevDebug`
+- smoke manual con data real o fixture que muestre quick actions y tarjetas vivas
+
+### G1.2 Agua
+
+Estado actual: `PARTIAL`
+
+PWA refs:
+
+- `app/(authenticated)/operador/agua/page.tsx`
+- `lib/db/water.ts`
+
+Android refs:
+
+- `feature/water/**`
+- `app/src/main/java/com/cleanx/lcx/ui/shell/MainScaffold.kt`
+
+Done when:
+
+- `Screen.Water` deja de usar placeholder y monta `feature/water`,
+- lecturas y escrituras van scoping por branch,
+- inserts guardan `recorded_by` y `branch`,
+- existen current tab + history tab + order water,
+- estados `critical/low/normal/optimal` coinciden con PWA,
+- errores y retry UX funcionan,
+- save y order actualizan historial sin salir de la pantalla.
+
+No blocker para G1:
+
+- selector de sucursal explicito para manager/superadmin,
+- cache offline local,
+- audit log explicito, si el PWA tampoco lo necesita para operacion inmediata.
+
+Evidence minima:
+
+- `./gradlew :app:assembleDevDebug`
+- tests unitarios/repo para branch scoping e inserts
+- smoke manual: save level + order water + refresh history
+
+### G1.3 Caja
+
+Estado actual: `PARTIAL`
+
+PWA refs:
+
+- `app/(authenticated)/operador/caja/registrar/page.tsx`
+- `app/(authenticated)/operador/caja/historial/page.tsx`
+- `lib/db/cash-movements.ts`
+
+Android refs:
+
+- `feature/cash/**`
+
+Done when:
+
+- apertura, gasto y cierre funcionan con desglose por denominacion,
+- resumen del dia y discrepancy preview de cierre son confiables,
+- historial muestra movimientos con usuario, monto, tipo y desglose expandible,
+- la feature es facilmente descubrible para registrar e historial, aunque sea dentro de un solo tab screen,
+- el contrato oficial usa `cash_movements`,
+- checklist y dashboard pueden depender de caja sin hacks temporales.
+
+Mover a G2, no blocker para G1:
+
+- filtros avanzados por fecha/tipo/busqueda,
+- export CSV,
+- deep link separado tipo `/registrar` y `/historial`.
+
+Evidence minima:
+
+- `./gradlew :feature:cash:test`
+- smoke manual apertura -> gasto -> cierre -> historial
+
+### G1.4 Checklist entrada / salida / historial
+
+Estado actual: `PARTIAL`
+
+PWA refs:
+
+- `app/(authenticated)/operador/checklist/entrada/page.tsx`
+- `app/(authenticated)/operador/checklist/salida/page.tsx`
+- `app/(authenticated)/operador/checklist/historial/page.tsx`
+- `lib/db/checklists.ts`
+
+Android refs:
+
+- `feature/checklist/**`
+
+Done when:
+
+- `Screen.Checklist` deja de usar placeholder y monta `feature/checklist`,
+- contrato y tablas se alinean con PWA (`maintenance_checklists`, `checklist_items`, `cash_movements`),
+- no se usa `cash_registers` como fuente de auto-validacion,
+- entrada y salida auto-validan agua y caja correctamente,
+- `completed_by` se persiste y los items sistemicos quedan sincronizados con BD,
+- checklists completados quedan read-only,
+- el operador puede completar entrada y salida sin tocar PWA,
+- historial minimo muestra checklists completados del dia y recientes.
+
+Mover a G2, no blocker para G1:
+
+- filtros de fecha y stats de historial,
+- vista manager de pendientes / incompletos.
+
+Evidence minima:
+
+- `./gradlew :app:assembleDevDebug`
+- tests para auto-validacion entry-1 / entry-2 / exit cash rule
+- smoke manual: agua -> caja -> checklist entrada -> checklist salida
+
+### G1.5 Encargos nuevo
+
+Estado actual: `PARTIAL`
+
+Snapshot al 2026-03-13:
+
+- ya permite decidir `pending` / `prepaid` / `paid` al crear,
+- si hay pago, captura metodo y monto,
+- persiste `promised_pickup_date`, `special_instructions` y add-ons manuales,
+- sigue faltando el salto estructural de customer picker + catalogos + pricing + inventory extras.
+
+PWA refs:
+
+- `app/(authenticated)/operador/encargos/nuevo/page.tsx`
+- `hooks/use-encargo-catalogs.ts`
+- `hooks/use-encargo-pricing.ts`
+- `components/tickets/customer-picker.tsx`
+- `components/tickets/inventory-search-scanner.tsx`
+
+Done when:
+
+- deja de ser form basico y usa catalogos reales,
+- incluye customer picker con buscar / crear,
+- soporta add-ons de ropa de cama y extras,
+- soporta inventory items con busqueda o scanner,
+- soporta pickup estimate,
+- soporta special items y notas especiales,
+- permite decidir `pending` vs `paid` al crear,
+- si `paid`, captura metodo (`cash`, `card`, `transfer`),
+- pricing coincide con reglas del PWA.
+
+Evidence minima:
+
+- `./gradlew :app:assembleDevDebug`
+- tests de pricing / mapping de payload
+- smoke manual creando ticket con add-ons y pago seleccionado
+
+### G1.6 Encargos detail
+
+Estado actual: `PARTIAL`
+
+Snapshot al 2026-03-13:
+
+- carga el ticket por `id` desde `tickets` para cold entry,
+- muestra `add_ons`, `promised_pickup_date`, `actual_pickup_date` y `special_instructions` si existen,
+- el flujo post-creacion ya aterriza en quick actions nativas equivalentes,
+- queda pendiente la validacion manual end-to-end para cerrarlo como gate formal.
+
+PWA refs:
+
+- `app/(authenticated)/operador/encargos/[id]/page.tsx`
+
+Done when:
+
+- muestra add-ons y pickup estimate si existen,
+- el flujo post-creacion puede entrar a quick actions reales o equivalente nativo,
+- mantiene status advance, mark paid, charge, print y SMS,
+- el detalle expone toda la informacion necesaria para entregar el ticket sin abrir PWA.
+
+Evidence minima:
+
+- `./gradlew :app:assembleDevDebug`
+- smoke manual desde ticket recien creado hasta cobro / impresion / ready / delivered
+
+### G1.7 Listas de encargos
+
+Estado actual: `DONE`
+
+PWA refs:
+
+- `/operador/encargos/activos`
+- `/operador/encargos/listos`
+- `/operador/encargos/completados`
+- `/operador/encargos/todos`
+
+Done when:
+
+- presets `active`, `ready`, `completed`, `all` son accesibles desde la IA nativa,
+- filtros por estado coinciden con el PWA,
+- no obligan al usuario a conocer rutas ocultas.
+
+Evidence minima:
+
+- `./gradlew :app:assembleDevDebug`
+- `./gradlew :app:testDevDebugUnitTest --tests 'com.cleanx.lcx.core.network.contract.*'`
+- smoke manual navegando y validando filtros
+
+### G1.8 Ventas autoservicio
+
+Estado actual: `SHELL`
+
+PWA refs:
+
+- `app/(authenticated)/operador/ventas/page.tsx`
+- `hooks/use-sales-cart.ts`
+- `hooks/use-ventas-catalogs.ts`
+
+Done when:
+
+- reemplaza shell por POS usable,
+- soporta customer picker y cliente anonimo,
+- soporta equipo + productos + inventario en un mismo cart,
+- persiste la venta con los mismos efectos del PWA,
+- usa un flujo de cobro nativo compatible con pagos ya existentes.
+
+Evidence minima:
+
+- `./gradlew :app:assembleDevDebug`
+- smoke manual con venta mixta de equipo + producto
+
+### G1.9 Role access completo de operador
+
+Estado actual: `PARTIAL`
+
+Done when:
+
+- employee no ve ni navega superficies manager/admin,
+- manager puede ver solo lo que el PWA permite,
+- More hub, drawer, dashboard y futuros accesos usan la misma matriz de roles,
+- cualquier acceso denegado tiene fallback UX claro.
+
+Evidence minima:
+
+- `./gradlew :core:test`
+- matrix de pruebas por rol
+
+## 7. Gate G2 - Operador Completo
+
+Objetivo: dejar de depender del PWA para herramientas operativas secundarias o de soporte.
+
+### G2.1 Incidentes
+
+Estado actual: `SHELL`
+
+Done when:
+
+- nuevo incidente soporta tipo, severidad, descripcion, personas, acciones,
+- soporta foto y audio con permisos nativos,
+- historial filtra y abre registros recientes.
+
+### G2.2 Turnos
+
+Estado actual: `SHELL`
+
+Done when:
+
+- control de entrada/salida es funcional,
+- historial y horario son navegables y correctos,
+- reportes respetan rol manager.
+
+### G2.3 Ropa danada
+
+Estado actual: `SHELL`
+
+Done when:
+
+- nuevo reporte soporta ticket, prenda, dano, fotos, audio y speech-to-text si se mantiene en scope,
+- historial navegable.
+
+### G2.4 Suministros
+
+Estado actual: `SHELL`
+
+Done when:
+
+- inventario de suministros soporta alta y ajuste stock,
+- etiquetas usa el stack de printing ya existente,
+- reportes y brother-debug dejan de ser placeholders.
+
+### G2.5 Shared surfaces operador
+
+Estado actual: `MISSING` o `SHELL`
+
+Incluye:
+
+- Vacaciones.
+- Calendario mensual / eventos.
+- Practicas.
+- Ayuda.
+- Profile.
+- Notifications.
+- Auth recovery (`forgot/reset`) si sigue siendo requisito del producto movil.
+
+Done when:
+
+- cada surface deja de ser shell o queda explicitamente fuera de scope movil por decision de producto,
+- si se saca de scope, la decision queda escrita aqui y en el registry.
+
+### G2.6 Deuda funcional movida desde G1
+
+Done when:
+
+- Caja tiene filtros/export si se decide parity completa.
+- Checklist historial tiene filtros/stats.
+- Agua tiene cache offline y/o audit trail si se decide parity completa.
+
+## 8. Gate G3 - Admin y Gerencia
+
+Objetivo: cerrar parity fuera de operacion de piso.
+
+### G3.1 Admin Precios
+
+Estado actual: `MISSING`
+
+Incluye:
+
+- servicios,
+- articulos,
+- paquetes,
+- promociones,
+- historial.
+
+Done when:
+
+- CRUD y auditoria relevante existen en Android o se decide formalmente que Admin queda web-only.
+
+### G3.2 Admin Usuarios
+
+Estado actual: `MISSING`
+
+Done when:
+
+- listado, detalle, alta, cambio de rol y activacion/desactivacion son posibles,
+- guardas de rol coinciden con PWA.
+
+### G3.3 Gerencia
+
+Estado actual: `MISSING`
+
+Incluye:
+
+- estadisticas,
+- inventario,
+- mantenimiento,
+- reportes.
+
+Done when:
+
+- cada modulo existe en Android o queda explicitamente fuera de scope movil por decision de producto,
+- reportes sensibles solo para manager/superadmin.
+
+## 9. Gate G4 - Hardening y Release Readiness
+
+Cerrar parity funcional no es suficiente. La app nativa se considera terminada solo si tambien pasa este gate.
+
+Estado actual: `NO`
+
+Done when:
+
+- QA fisico de pagos e impresion actualizado,
+- kill/resume del flujo transaccional sigue consistente,
+- permisos nativos criticos (camera, audio, notifications) tienen manejo correcto,
+- evidencias multimedia suben correctamente a Storage,
+- este gate, el registry y el plan de workspace quedaron sincronizados,
+- existe memo final de go/no-go para reemplazo operativo del PWA en los modulos cerrados.
+
+## 10. Orden recomendado de cierre
+
+Menor arrepentimiento tecnico:
+
+1. G0 measurement integrity.
+2. Agua hardening.
+3. Checklist hardening.
+4. Completar Encargos nuevo.
+5. Hacer discoverable presets de encargos y cerrar detail.
+6. Reemplazar Dashboard.
+7. Construir Ventas.
+8. Incidentes / Ropa danada / Suministros / Turnos.
+9. Shared surfaces operador.
+10. Admin.
+11. Gerencia.
+12. G4 hardening final.
+
+Razon:
+
+- Dashboard depende de agua, caja, checklist y tickets.
+- Checklist depende de agua y caja correctos.
+- Ventas reutiliza customer/catalog/payment primitives que tambien sirven para encargos.
+- Admin y Gerencia son alto volumen de UI pero no desbloquean operacion de piso.
+
+## 11. Regla de merge para futuras iteraciones
+
+Una PR solo puede mover una feature a `DONE` en este gate si entrega:
+
+1. cambio funcional visible en Android,
+2. referencia explicita al comportamiento PWA preservado,
+3. build y tests de modulos tocados,
+4. smoke manual minimo si la feature toca hardware, media o storage,
+5. actualizacion de este documento.
+
+Si una feature se decide `web-only`, no se deja silenciosamente en shell:
+
+- se documenta aqui,
+- se actualiza el registry,
+- se quita de cualquier gate futuro de cierre nativo.

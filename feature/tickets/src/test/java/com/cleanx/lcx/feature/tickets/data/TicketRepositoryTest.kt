@@ -6,6 +6,10 @@ import com.cleanx.lcx.core.model.ServiceType
 import com.cleanx.lcx.core.model.Ticket
 import com.cleanx.lcx.core.model.TicketStatus
 import com.cleanx.lcx.core.network.CreateTicketsRequest
+import com.cleanx.lcx.core.network.SmsNotificationClient
+import com.cleanx.lcx.core.network.SmsNotificationResult
+import com.cleanx.lcx.core.network.SmsSendResponseData
+import com.cleanx.lcx.core.network.SupabaseTableClient
 import com.cleanx.lcx.core.network.TicketApi
 import com.cleanx.lcx.core.network.TicketDraft
 import com.cleanx.lcx.core.network.TicketResponse
@@ -30,6 +34,8 @@ import retrofit2.Response
 class TicketRepositoryTest {
 
     private lateinit var api: TicketApi
+    private lateinit var smsNotificationClient: SmsNotificationClient
+    private lateinit var supabase: SupabaseTableClient
     private lateinit var repository: TicketRepository
     private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
 
@@ -52,7 +58,35 @@ class TicketRepositoryTest {
     @Before
     fun setUp() {
         api = mockk()
-        repository = TicketRepository(api, json)
+        smsNotificationClient = mockk()
+        supabase = mockk(relaxed = true)
+        coEvery {
+            smsNotificationClient.sendTicketReadyPickup(any(), any(), any(), any())
+        } returns SmsNotificationResult.Success(
+            data = SmsSendResponseData(
+                notificationId = "sms-1",
+                status = "pending",
+                provider = "bird",
+                idempotent = false,
+            ),
+        )
+        coEvery {
+            smsNotificationClient.sendTicketPickupReminder(
+                any(),
+                any(),
+                any(),
+                null,
+                null,
+            )
+        } returns SmsNotificationResult.Success(
+            data = SmsSendResponseData(
+                notificationId = "sms-2",
+                status = "pending",
+                provider = "bird",
+                idempotent = false,
+            ),
+        )
+        repository = TicketRepository(api, json, smsNotificationClient, supabase)
     }
 
     // ---- createTickets ----
@@ -89,7 +123,16 @@ class TicketRepositoryTest {
             service = "Planchado",
             weight = 3.0,
             notes = "Urgente",
+            addOns = listOf("Suavizante", "Bolsa"),
+            addOnsTotal = 40.0,
+            promisedPickupDate = "2026-03-15",
+            specialInstructions = "Avisar antes de entregar",
             totalAmount = 150.0,
+            subtotal = 110.0,
+            paymentStatus = "prepaid",
+            paymentMethod = "transfer",
+            paidAmount = 50.0,
+            prepaidAmount = 50.0,
         )
 
         val requestSlot = slot<CreateTicketsRequest>()
@@ -105,6 +148,15 @@ class TicketRepositoryTest {
         assertEquals("Maria Lopez", captured.tickets[0].customerName)
         assertEquals("in-store", captured.tickets[0].serviceType)
         assertEquals("Planchado", captured.tickets[0].service)
+        assertEquals(listOf("Suavizante", "Bolsa"), captured.tickets[0].addOns)
+        assertEquals(40.0, captured.tickets[0].addOnsTotal)
+        assertEquals("2026-03-15", captured.tickets[0].promisedPickupDate)
+        assertEquals("Avisar antes de entregar", captured.tickets[0].specialInstructions)
+        assertEquals(110.0, captured.tickets[0].subtotal)
+        assertEquals("prepaid", captured.tickets[0].paymentStatus)
+        assertEquals("transfer", captured.tickets[0].paymentMethod)
+        assertEquals(50.0, captured.tickets[0].paidAmount)
+        assertEquals(50.0, captured.tickets[0].prepaidAmount)
     }
 
     @Test
@@ -232,6 +284,26 @@ class TicketRepositoryTest {
     }
 
     @Test
+    fun `updateStatus sends ready SMS when ticket reaches READY`() = runTest {
+        val readyTicket = sampleTicket.copy(status = TicketStatus.READY)
+
+        coEvery { api.updateStatus(any(), any()) } returns Response.success(
+            TicketResponse(data = readyTicket),
+        )
+
+        repository.updateStatus("ticket-456", TicketStatus.READY)
+
+        coVerify(exactly = 1) {
+            smsNotificationClient.sendTicketReadyPickup(
+                ticketId = "abc-123",
+                ticketNumber = "T-20260302-0001",
+                customerPhone = "+521234567890",
+                branchId = null,
+            )
+        }
+    }
+
+    @Test
     fun `updateStatus error parses validation error`() = runTest {
         val errorJson = """{"error":"Invalid status transition","code":"INVALID_STATUS_TRANSITION","details":"Cannot go from ready to processing"}"""
         val errorBody = errorJson.toResponseBody("application/json".toMediaType())
@@ -245,6 +317,42 @@ class TicketRepositoryTest {
         assertEquals(422, error.httpStatus)
         assertEquals("INVALID_STATUS_TRANSITION", error.code)
         assertEquals("Invalid status transition", error.message)
+    }
+
+    @Test
+    fun `sendPickupReminder sends reminder SMS for READY tickets`() = runTest {
+        val readyTicket = sampleTicket.copy(status = TicketStatus.READY)
+
+        val result = repository.sendPickupReminder(readyTicket)
+
+        assertTrue(result is SmsNotificationResult.Success)
+        coVerify(exactly = 1) {
+            smsNotificationClient.sendTicketPickupReminder(
+                ticketId = "abc-123",
+                ticketNumber = "T-20260302-0001",
+                customerPhone = "+521234567890",
+                reminderDate = null,
+                branchId = null,
+            )
+        }
+    }
+
+    @Test
+    fun `sendPickupReminder skips non-READY tickets`() = runTest {
+        val processingTicket = sampleTicket.copy(status = TicketStatus.PROCESSING)
+
+        val result = repository.sendPickupReminder(processingTicket)
+
+        assertTrue(result is SmsNotificationResult.Skipped)
+        coVerify(exactly = 0) {
+            smsNotificationClient.sendTicketPickupReminder(
+                any(),
+                any(),
+                any(),
+                null,
+                null,
+            )
+        }
     }
 
     // ---- updatePayment ----

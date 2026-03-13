@@ -5,7 +5,10 @@ import kotlinx.serialization.Serializable
 sealed interface Screen {
     @Serializable data object Login : Screen
     @Serializable data object TicketList : Screen
-    @Serializable data class TicketDetail(val ticketId: String) : Screen
+    @Serializable data class TicketDetail(
+        val ticketId: String,
+        val quickActions: Boolean = false,
+    ) : Screen
     @Serializable data object CreateTicket : Screen
     @Serializable data class Charge(
         val ticketId: String,

@@ -163,9 +163,15 @@ class TicketSerializationContractTest {
                     service = "Lavado y Planchado",
                     weight = 5.5,
                     totalAmount = 25000.0,
+                    subtotal = 22000.0,
+                    addOnsTotal = 3000.0,
+                    addOns = listOf("Suavizante", "Bolsa"),
+                    promisedPickupDate = "2026-03-05",
+                    specialInstructions = "Llamar al llegar",
                     paymentMethod = "cash",
                     paymentStatus = "pending",
                     paidAmount = 0.0,
+                    prepaidAmount = 0.0,
                 ),
             ),
         )
@@ -183,9 +189,16 @@ class TicketSerializationContractTest {
         assertEquals("Lavado y Planchado", ticket["service"]!!.jsonPrimitive.content)
         assertEquals("5.5", ticket["weight"]!!.jsonPrimitive.content)
         assertEquals("25000.0", ticket["total_amount"]!!.jsonPrimitive.content)
+        assertEquals("22000.0", ticket["subtotal"]!!.jsonPrimitive.content)
+        assertEquals("3000.0", ticket["add_ons_total"]!!.jsonPrimitive.content)
+        assertEquals("Suavizante", ticket["add_ons"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals("Bolsa", ticket["add_ons"]!!.jsonArray[1].jsonPrimitive.content)
+        assertEquals("2026-03-05", ticket["promised_pickup_date"]!!.jsonPrimitive.content)
+        assertEquals("Llamar al llegar", ticket["special_instructions"]!!.jsonPrimitive.content)
         assertEquals("cash", ticket["payment_method"]!!.jsonPrimitive.content)
         assertEquals("pending", ticket["payment_status"]!!.jsonPrimitive.content)
         assertEquals("0.0", ticket["paid_amount"]!!.jsonPrimitive.content)
+        assertEquals("0.0", ticket["prepaid_amount"]!!.jsonPrimitive.content)
     }
 
     @Test

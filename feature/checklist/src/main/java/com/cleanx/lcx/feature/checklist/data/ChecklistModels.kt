@@ -15,6 +15,15 @@ import kotlinx.serialization.json.jsonPrimitive
 enum class ChecklistType {
     @SerialName("entrada") ENTRADA,
     @SerialName("salida") SALIDA,
+    ;
+
+    companion object {
+        fun fromPersisted(value: String?): ChecklistType? = when (value?.lowercase()) {
+            "entrada" -> ENTRADA
+            "salida" -> SALIDA
+            else -> null
+        }
+    }
 }
 
 @Serializable
@@ -29,18 +38,18 @@ enum class ChecklistStatus {
 // ---------------------------------------------------------------------------
 
 /**
- * Represents a row in the `checklists` table.
+ * Represents a row in the `maintenance_checklists` table.
  */
 @Serializable
 data class Checklist(
     val id: String? = null,
-    val type: ChecklistType,
+    @SerialName("checklist_type") val type: ChecklistType? = null,
     val status: ChecklistStatus = ChecklistStatus.PENDING,
-    val date: String,
+    @SerialName("checklist_date") val date: String,
     val notes: String? = null,
+    @SerialName("completion_notes") val completionNotes: String? = null,
     @SerialName("completed_by") val completedBy: String? = null,
     @SerialName("completed_at") val completedAt: String? = null,
-    val branch: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
 )
@@ -60,7 +69,6 @@ data class ChecklistItem(
     @SerialName("completed_by") val completedBy: String? = null,
     @SerialName("completed_at") val completedAt: String? = null,
     val notes: String? = null,
-    @SerialName("sort_order") val sortOrder: Int = 0,
     @SerialName("created_at") val createdAt: String? = null,
 )
 
@@ -98,10 +106,17 @@ enum class ItemCategory {
 /** entry-1 = water level must be recorded today */
 const val TEMPLATE_WATER_LEVEL = "entry-1"
 
-/** entry-2 = cash register must be opened today */
-const val TEMPLATE_CASH_REGISTER = "entry-2"
+/** entry-2 = opening cash movement must be recorded today */
+const val TEMPLATE_OPENING_CASH = "entry-2"
 
-val SYSTEM_VALIDATED_TEMPLATES = setOf(TEMPLATE_WATER_LEVEL, TEMPLATE_CASH_REGISTER)
+/** exit-1 = closing cash movement must be recorded today */
+const val TEMPLATE_CLOSING_CASH = "exit-1"
+
+val SYSTEM_VALIDATED_TEMPLATES = setOf(
+    TEMPLATE_WATER_LEVEL,
+    TEMPLATE_OPENING_CASH,
+    TEMPLATE_CLOSING_CASH,
+)
 
 // ---------------------------------------------------------------------------
 // UI-oriented model (item + parsed metadata)
@@ -159,6 +174,42 @@ fun ChecklistItem.toUi(): ChecklistItemUi {
         description = description,
         isSystemValidated = meta.templateId in SYSTEM_VALIDATED_TEMPLATES,
     )
+}
+
+fun Checklist.resolvedType(fallback: ChecklistType = ChecklistType.ENTRADA): ChecklistType {
+    return type ?: ChecklistType.fromPersisted(notes) ?: fallback
+}
+
+private val templateDisplayOrder = listOf(
+    "entry-1",
+    "entry-2",
+    "entry-3",
+    "entry-4",
+    "entry-5",
+    "entry-6",
+    "entry-7",
+    "entry-8",
+    "exit-1",
+    "exit-2",
+    "exit-3",
+    "exit-4",
+    "exit-5",
+    "exit-6",
+    "exit-9",
+    "exit-7",
+    "exit-8",
+).withIndex().associate { (index, templateId) -> templateId to index }
+
+fun sortChecklistItems(items: List<ChecklistItem>): List<ChecklistItem> {
+    return items.sortedBy { item ->
+        templateDisplayOrder[item.parseMetadata().templateId] ?: Int.MAX_VALUE
+    }
+}
+
+fun sortChecklistUiItems(items: List<ChecklistItemUi>): List<ChecklistItemUi> {
+    return items.sortedBy { item ->
+        templateDisplayOrder[item.metadata.templateId] ?: Int.MAX_VALUE
+    }
 }
 
 /**

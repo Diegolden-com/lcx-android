@@ -37,6 +37,11 @@ val devApiBaseUrl = readConfig(
     envName = "LCX_DEV_API_BASE_URL",
     defaultValue = "http://10.0.2.2:3000",
 )
+val devNotificationsBaseUrl = readConfig(
+    propertyName = "LCX_DEV_NOTIFICATIONS_BASE_URL",
+    envName = "LCX_DEV_NOTIFICATIONS_BASE_URL",
+    defaultValue = "http://10.0.2.2:8080",
+)
 val devSupabaseUrl = readConfig(
     propertyName = "LCX_DEV_SUPABASE_URL",
     envName = "LCX_DEV_SUPABASE_URL",
@@ -71,6 +76,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000\"")
+        buildConfigField("String", "NOTIFICATIONS_BASE_URL", "\"http://10.0.2.2:8080\"")
         buildConfigField("String", "SUPABASE_URL", "\"https://placeholder.supabase.co\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"placeholder-anon-key\"")
     }
@@ -82,6 +88,7 @@ android {
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
             buildConfigField("String", "API_BASE_URL", devApiBaseUrl.toBuildConfigString())
+            buildConfigField("String", "NOTIFICATIONS_BASE_URL", devNotificationsBaseUrl.toBuildConfigString())
             buildConfigField("String", "SUPABASE_URL", devSupabaseUrl.toBuildConfigString())
             buildConfigField("String", "SUPABASE_ANON_KEY", devSupabaseAnonKey.toBuildConfigString())
             buildConfigField("Boolean", "USE_REAL_ZETTLE", "false")
@@ -92,6 +99,7 @@ android {
             applicationIdSuffix = ".staging"
             versionNameSuffix = "-staging"
             buildConfigField("String", "API_BASE_URL", "\"https://staging.lcx.example.com\"")
+            buildConfigField("String", "NOTIFICATIONS_BASE_URL", "\"https://staging.lcx.example.com\"")
             buildConfigField("String", "SUPABASE_URL", "\"https://staging.supabase.co\"")
             buildConfigField("String", "SUPABASE_ANON_KEY", "\"staging-anon-key\"")
             buildConfigField("Boolean", "USE_REAL_ZETTLE", "true")
@@ -100,6 +108,7 @@ android {
         create("prod") {
             dimension = "environment"
             buildConfigField("String", "API_BASE_URL", "\"https://lcx.example.com\"")
+            buildConfigField("String", "NOTIFICATIONS_BASE_URL", "\"https://lcx.example.com\"")
             buildConfigField("String", "SUPABASE_URL", "\"https://prod.supabase.co\"")
             buildConfigField("String", "SUPABASE_ANON_KEY", "\"prod-anon-key\"")
             buildConfigField("Boolean", "USE_REAL_ZETTLE", "true")
@@ -143,6 +152,8 @@ dependencies {
     implementation(project(":feature:payments"))
     implementation(project(":feature:printing"))
     implementation(project(":feature:cash"))
+    implementation(project(":feature:water"))
+    implementation(project(":feature:checklist"))
 
     // AndroidX Core
     implementation(libs.androidx.core.ktx)

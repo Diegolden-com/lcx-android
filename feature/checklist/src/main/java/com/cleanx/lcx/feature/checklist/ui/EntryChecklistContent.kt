@@ -159,7 +159,7 @@ private fun ChecklistBody(
         }
 
         // -- Checklist items
-        items(items, key = { it.item.id ?: it.item.sortOrder }) { itemUi ->
+        items(items, key = { it.item.id ?: it.metadata.templateId ?: it.title }) { itemUi ->
             ChecklistItemRow(
                 itemUi = itemUi,
                 checklistStatus = checklist.status,

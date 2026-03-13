@@ -1,453 +1,430 @@
 package com.cleanx.lcx.feature.checklist.data
 
-import com.cleanx.lcx.core.config.BuildConfigProvider
-import com.cleanx.lcx.core.network.TokenProvider
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import com.cleanx.lcx.core.network.SupabaseTableClient
+import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import timber.log.Timber
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
+import java.time.OffsetDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Repository for checklist operations via Supabase PostgREST API.
- *
- * Uses OkHttp directly (the DI-provided client already includes
- * [AuthInterceptor] which adds the Bearer token).
+ * Repository for checklist operations against the same Supabase tables used by
+ * the PWA (`maintenance_checklists`, `checklist_items`, `cash_movements`).
  */
 @Singleton
 class ChecklistRepository @Inject constructor(
-    private val client: OkHttpClient,
-    private val config: BuildConfigProvider,
-    private val tokenProvider: TokenProvider,
-    private val json: Json,
+    private val supabase: SupabaseTableClient,
 ) {
+    private val checklistTable = "maintenance_checklists"
+    private val itemTable = "checklist_items"
 
-    private val restBase: String
-        get() = "${config.supabaseUrl}/rest/v1"
-
-    private val contentType = "application/json".toMediaType()
-
-    // -- GET TODAY'S CHECKLIST ------------------------------------------------
-
-    /**
-     * Get today's checklist for the given type, creating it with template
-     * items if one doesn't exist yet.
-     *
-     * Mirrors PWA's `getTodayChecklist(type)`.
-     */
     suspend fun getTodayChecklist(type: ChecklistType): Result<Pair<Checklist, List<ChecklistItem>>> {
-        val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
-        val typeStr = when (type) {
-            ChecklistType.ENTRADA -> "entrada"
-            ChecklistType.SALIDA -> "salida"
-        }
+        val today = LocalDate.now().toString()
+        Timber.d("Loading today's checklist type=%s date=%s", type, today)
 
-        return try {
-            // 1. Try to find existing checklist for today
-            val existing = selectChecklists(typeStr, today)
-            if (existing.isNotEmpty()) {
-                val checklist = existing.first()
-                val items = selectChecklistItems(checklist.id!!)
-                return Result.success(checklist to items)
+        return runCatching {
+            var checklist = selectTodayChecklist(type, today).getOrThrow()
+            if (checklist == null) {
+                checklist = createChecklist(type, today).getOrElse { createError ->
+                    selectTodayChecklist(type, today).getOrThrow() ?: throw createError
+                }
             }
 
-            // 2. None found – create a new one with template items
-            val newChecklist = insertChecklist(
-                Checklist(type = type, date = today, status = ChecklistStatus.PENDING)
-            )
-            val templateItems = createTemplateItems(type, newChecklist.id!!)
-            val insertedItems = insertChecklistItems(templateItems)
+            val checklistId = checklist.id
+                ?: throw IllegalStateException("Checklist sin id despues de cargar/crear.")
 
-            Result.success(newChecklist to insertedItems)
-        } catch (e: Exception) {
-            Timber.e(e, "getTodayChecklist(%s) failed", typeStr)
-            Result.failure(e)
+            val items = selectChecklistItems(checklistId).getOrThrow().ifEmpty {
+                insertChecklistItems(createTemplateItems(type, checklistId)).getOrThrow()
+            }
+
+            checklist to sortChecklistItems(items)
         }
     }
 
-    // -- TOGGLE ITEM ----------------------------------------------------------
-
-    /**
-     * Toggle a checklist item's completion status.
-     * Mirrors PWA's `updateChecklistItem(id, completed)`.
-     */
     suspend fun updateChecklistItem(
         itemId: String,
         completed: Boolean,
         userId: String? = null,
     ): Result<ChecklistItem> {
-        return try {
-            val now = java.time.OffsetDateTime.now().toString()
-            val body = buildString {
-                append("{")
-                append("\"is_completed\":$completed")
-                if (completed && userId != null) {
-                    append(",\"completed_by\":\"$userId\"")
-                    append(",\"completed_at\":\"$now\"")
-                } else if (!completed) {
-                    append(",\"completed_by\":null")
-                    append(",\"completed_at\":null")
-                }
-                append("}")
-            }
+        val now = OffsetDateTime.now().toString()
+        val payload = ChecklistItemUpdate(
+            isCompleted = completed,
+            completedBy = if (completed) userId else null,
+            completedAt = if (completed) now else null,
+        )
 
-            val request = Request.Builder()
-                .url("$restBase/checklist_items?id=eq.$itemId")
-                .addHeader("apikey", config.supabaseAnonKey)
-                .addHeader("Prefer", "return=representation")
-                .patch(body.toRequestBody(contentType))
-                .build()
-
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) {
-                throw PostgRestException(response.code, response.body?.string())
-            }
-            val items = json.decodeFromString<List<ChecklistItem>>(
-                response.body!!.string()
-            )
-            Result.success(items.first())
-        } catch (e: Exception) {
-            Timber.e(e, "updateChecklistItem(%s, %s) failed", itemId, completed)
-            Result.failure(e)
+        return supabase.updateReturning<ChecklistItemUpdate, ChecklistItem>(itemTable, payload) {
+            eq("id", itemId)
+        }.map { rows ->
+            rows.firstOrNull()
+                ?: throw IllegalStateException("No se actualizo el item $itemId.")
+        }.onFailure { error ->
+            Timber.e(error, "updateChecklistItem(%s, %s) failed", itemId, completed)
         }
     }
 
-    // -- COMPLETE CHECKLIST ---------------------------------------------------
-
-    /**
-     * Mark a checklist as completed.
-     * Mirrors PWA's `completeChecklist(id, notes)`.
-     */
     suspend fun completeChecklist(
         checklistId: String,
         notes: String? = null,
         userId: String? = null,
     ): Result<Checklist> {
-        return try {
-            val now = java.time.OffsetDateTime.now().toString()
-            val body = buildString {
-                append("{")
-                append("\"status\":\"completed\"")
-                if (notes != null) append(",\"notes\":${json.encodeToString(notes)}")
-                if (userId != null) append(",\"completed_by\":\"$userId\"")
-                append(",\"completed_at\":\"$now\"")
-                append("}")
+        val payload = ChecklistCompletionUpdate(
+            status = ChecklistStatus.COMPLETED,
+            completedBy = userId,
+            completedAt = OffsetDateTime.now().toString(),
+            completionNotes = notes,
+        )
+
+        return supabase.updateReturning<ChecklistCompletionUpdate, Checklist>(checklistTable, payload) {
+            eq("id", checklistId)
+        }.map { rows ->
+            rows.firstOrNull()
+                ?: throw IllegalStateException("No se actualizo el checklist $checklistId.")
+        }.onFailure { error ->
+            Timber.e(error, "completeChecklist(%s) failed", checklistId)
+        }
+    }
+
+    suspend fun getChecklistHistory(limit: Long = 30): Result<List<Checklist>> {
+        return supabase.selectWithRequest<Checklist>(checklistTable) {
+            filter { eq("status", ChecklistStatus.COMPLETED.serializedValue()) }
+            order("checklist_date", Order.DESCENDING)
+            limit(limit)
+        }.onFailure { error ->
+            Timber.e(error, "getChecklistHistory failed")
+        }
+    }
+
+    suspend fun hasWaterLevelToday(branch: String? = null): Boolean {
+        val today = LocalDate.now().toString()
+        return supabase.selectWithRequest<IdOnly>("water_levels") {
+            filter {
+                gte("created_at", "${today}T00:00:00")
+                lte("created_at", "${today}T23:59:59")
+                if (branch != null) {
+                    eq("branch", branch)
+                }
             }
-
-            val request = Request.Builder()
-                .url("$restBase/checklists?id=eq.$checklistId")
-                .addHeader("apikey", config.supabaseAnonKey)
-                .addHeader("Prefer", "return=representation")
-                .patch(body.toRequestBody(contentType))
-                .build()
-
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) {
-                throw PostgRestException(response.code, response.body?.string())
+            limit(1)
+        }.map { it.isNotEmpty() }
+            .getOrElse { error ->
+                Timber.w(error, "hasWaterLevelToday check failed")
+                false
             }
-            val checklists = json.decodeFromString<List<Checklist>>(
-                response.body!!.string()
-            )
-            Result.success(checklists.first())
-        } catch (e: Exception) {
-            Timber.e(e, "completeChecklist(%s) failed", checklistId)
-            Result.failure(e)
-        }
     }
 
-    // -- CHECKLIST HISTORY ----------------------------------------------------
-
-    /**
-     * Get completed checklists (both types), ordered by date descending.
-     */
-    suspend fun getChecklistHistory(limit: Int = 30): Result<List<Checklist>> {
-        return try {
-            val url = "$restBase/checklists" +
-                "?status=eq.completed" +
-                "&order=date.desc" +
-                "&limit=$limit"
-            val request = Request.Builder()
-                .url(url)
-                .addHeader("apikey", config.supabaseAnonKey)
-                .get()
-                .build()
-
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) {
-                throw PostgRestException(response.code, response.body?.string())
+    suspend fun hasCashMovementToday(type: String): Boolean {
+        val today = LocalDate.now().toString()
+        return supabase.selectWithRequest<IdOnly>("cash_movements") {
+            filter {
+                eq("type", type)
+                gte("created_at", "${today}T00:00:00")
+                lte("created_at", "${today}T23:59:59")
             }
-            val checklists = json.decodeFromString<List<Checklist>>(
-                response.body!!.string()
-            )
-            Result.success(checklists)
-        } catch (e: Exception) {
-            Timber.e(e, "getChecklistHistory failed")
-            Result.failure(e)
+            limit(1)
+        }.map { it.isNotEmpty() }
+            .getOrElse { error ->
+                Timber.w(error, "hasCashMovementToday(%s) check failed", type)
+                false
+            }
+    }
+
+    private suspend fun selectTodayChecklist(
+        type: ChecklistType,
+        date: String,
+    ): Result<Checklist?> {
+        return runCatching {
+            val current = selectChecklistByField("checklist_type", type.serializedValue(), date).getOrThrow()
+            if (current != null) {
+                current
+            } else {
+                val legacy = selectChecklistByField("notes", type.serializedValue(), date).getOrThrow()
+                if (legacy?.id != null && legacy.type == null) {
+                    backfillLegacyType(legacy.id, type).getOrElse { legacy }
+                } else {
+                    legacy
+                }
+            }
         }
     }
 
-    // -- OPERATIONAL ROUTINE STATUS -------------------------------------------
+    private suspend fun selectChecklistByField(
+        field: String,
+        value: String,
+        date: String,
+    ): Result<Checklist?> {
+        return supabase.selectWithRequest<Checklist>(checklistTable) {
+            filter {
+                eq(field, value)
+                eq("checklist_date", date)
+            }
+            order("created_at", Order.DESCENDING)
+            limit(1)
+        }.map { it.firstOrNull() }
+    }
 
-    /**
-     * Check if water level has been recorded today.
-     * Used for auto-validation of entry-1.
-     */
-    suspend fun hasWaterLevelToday(): Boolean {
-        return try {
-            val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
-            val url = "$restBase/water_levels" +
-                "?created_at=gte.${today}T00:00:00" +
-                "&limit=1"
-            val request = Request.Builder()
-                .url(url)
-                .addHeader("apikey", config.supabaseAnonKey)
-                .get()
-                .build()
-
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) return false
-            val body = response.body?.string() ?: return false
-            // If array is non-empty, water level was recorded today
-            body.contains("\"id\"")
-        } catch (e: Exception) {
-            Timber.w(e, "hasWaterLevelToday check failed")
-            false
+    private suspend fun createChecklist(
+        type: ChecklistType,
+        date: String,
+    ): Result<Checklist> {
+        return supabase.insertReturning<ChecklistInsert, Checklist>(
+            table = checklistTable,
+            value = ChecklistInsert(
+                type = type,
+                date = date,
+            ),
+        ).onFailure { error ->
+            Timber.e(error, "createChecklist(%s, %s) failed", type, date)
         }
     }
 
-    /**
-     * Check if cash register has been opened today.
-     * Used for auto-validation of entry-2.
-     */
-    suspend fun hasCashRegisterToday(): Boolean {
-        return try {
-            val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
-            val url = "$restBase/cash_registers" +
-                "?created_at=gte.${today}T00:00:00" +
-                "&limit=1"
-            val request = Request.Builder()
-                .url(url)
-                .addHeader("apikey", config.supabaseAnonKey)
-                .get()
-                .build()
-
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) return false
-            val body = response.body?.string() ?: return false
-            body.contains("\"id\"")
-        } catch (e: Exception) {
-            Timber.w(e, "hasCashRegisterToday check failed")
-            false
+    private suspend fun backfillLegacyType(
+        checklistId: String,
+        type: ChecklistType,
+    ): Result<Checklist> {
+        return supabase.updateReturning<ChecklistTypeBackfill, Checklist>(
+            checklistTable,
+            ChecklistTypeBackfill(type = type),
+        ) {
+            eq("id", checklistId)
+        }.map { rows ->
+            rows.firstOrNull()
+                ?: throw IllegalStateException("No se pudo backfillear el checklist $checklistId.")
+        }.onFailure { error ->
+            Timber.w(error, "backfillLegacyType(%s, %s) failed", checklistId, type)
         }
     }
 
-    // -- PRIVATE HELPERS ------------------------------------------------------
-
-    private fun selectChecklists(type: String, date: String): List<Checklist> {
-        val url = "$restBase/checklists" +
-            "?type=eq.$type" +
-            "&date=eq.$date" +
-            "&order=created_at.desc" +
-            "&limit=1"
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("apikey", config.supabaseAnonKey)
-            .get()
-            .build()
-
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw PostgRestException(response.code, response.body?.string())
+    private suspend fun selectChecklistItems(checklistId: String): Result<List<ChecklistItem>> {
+        return supabase.selectWithRequest<ChecklistItem>(itemTable) {
+            filter { eq("checklist_id", checklistId) }
+            order("created_at", Order.ASCENDING)
         }
-        return json.decodeFromString<List<Checklist>>(response.body!!.string())
     }
 
-    private fun selectChecklistItems(checklistId: String): List<ChecklistItem> {
-        val url = "$restBase/checklist_items" +
-            "?checklist_id=eq.$checklistId" +
-            "&order=sort_order.asc"
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("apikey", config.supabaseAnonKey)
-            .get()
-            .build()
-
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw PostgRestException(response.code, response.body?.string())
+    private suspend fun insertChecklistItems(
+        items: List<ChecklistItemInsert>,
+    ): Result<List<ChecklistItem>> {
+        return supabase.insertManyReturning<ChecklistItemInsert, ChecklistItem>(itemTable, items)
+            .onFailure { error ->
+            Timber.e(error, "insertChecklistItems failed")
         }
-        return json.decodeFromString<List<ChecklistItem>>(response.body!!.string())
     }
 
-    private fun insertChecklist(checklist: Checklist): Checklist {
-        val body = json.encodeToString(checklist)
-        val request = Request.Builder()
-            .url("$restBase/checklists")
-            .addHeader("apikey", config.supabaseAnonKey)
-            .addHeader("Prefer", "return=representation")
-            .post(body.toRequestBody(contentType))
-            .build()
-
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw PostgRestException(response.code, response.body?.string())
-        }
-        return json.decodeFromString<List<Checklist>>(response.body!!.string()).first()
-    }
-
-    private fun insertChecklistItems(items: List<ChecklistItem>): List<ChecklistItem> {
-        val body = json.encodeToString(items)
-        val request = Request.Builder()
-            .url("$restBase/checklist_items")
-            .addHeader("apikey", config.supabaseAnonKey)
-            .addHeader("Prefer", "return=representation")
-            .post(body.toRequestBody(contentType))
-            .build()
-
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw PostgRestException(response.code, response.body?.string())
-        }
-        return json.decodeFromString<List<ChecklistItem>>(response.body!!.string())
-    }
-
-    // -- TEMPLATE ITEMS -------------------------------------------------------
-
-    /**
-     * Template items matching the PWA's checklist templates.
-     */
     private fun createTemplateItems(
         type: ChecklistType,
         checklistId: String,
-    ): List<ChecklistItem> {
-        return when (type) {
-            ChecklistType.ENTRADA -> entryTemplateItems(checklistId)
-            ChecklistType.SALIDA -> exitTemplateItems(checklistId)
-        }
-    }
-
-    private fun entryTemplateItems(checklistId: String): List<ChecklistItem> = listOf(
-        templateItem(
-            checklistId = checklistId,
-            description = "Revisar nivel de agua: Verificar el nivel del tanque de agua y registrarlo en el sistema",
-            templateId = "entry-1",
-            category = "maintenance",
-            required = true,
-            sortOrder = 1,
-        ),
-        templateItem(
-            checklistId = checklistId,
-            description = "Abrir caja registradora: Verificar el fondo de caja y registrar apertura en el sistema",
-            templateId = "entry-2",
-            category = "admin",
-            required = true,
-            sortOrder = 2,
-        ),
-        templateItem(
-            checklistId = checklistId,
-            description = "Limpieza de area de recepcion: Barrer y trapear el area de atencion al cliente",
-            templateId = "entry-3",
-            category = "cleaning",
-            required = true,
-            sortOrder = 3,
-        ),
-        templateItem(
-            checklistId = checklistId,
-            description = "Verificar equipos de lavado: Revisar que todas las lavadoras y secadoras esten operativas",
-            templateId = "entry-4",
-            category = "maintenance",
-            required = true,
-            sortOrder = 4,
-        ),
-        templateItem(
-            checklistId = checklistId,
-            description = "Revisar suministros: Verificar existencias de detergente, suavizante y bolsas",
-            templateId = "entry-5",
-            category = "admin",
-            required = false,
-            sortOrder = 5,
-        ),
-        templateItem(
-            checklistId = checklistId,
-            description = "Verificar extintores: Comprobar que los extintores esten en su lugar y vigentes",
-            templateId = "entry-6",
-            category = "safety",
-            required = false,
-            sortOrder = 6,
-        ),
-    )
-
-    private fun exitTemplateItems(checklistId: String): List<ChecklistItem> = listOf(
-        templateItem(
-            checklistId = checklistId,
-            description = "Cerrar caja registradora: Realizar el corte de caja y registrar cierre",
-            templateId = "exit-1",
-            category = "admin",
-            required = true,
-            sortOrder = 1,
-        ),
-        templateItem(
-            checklistId = checklistId,
-            description = "Limpieza general: Realizar limpieza completa del local",
-            templateId = "exit-2",
-            category = "cleaning",
-            required = true,
-            sortOrder = 2,
-        ),
-        templateItem(
-            checklistId = checklistId,
-            description = "Apagar equipos: Apagar todas las maquinas y equipos no esenciales",
-            templateId = "exit-3",
-            category = "maintenance",
-            required = true,
-            sortOrder = 3,
-        ),
-        templateItem(
-            checklistId = checklistId,
-            description = "Verificar cerraduras: Asegurar puertas y ventanas del local",
-            templateId = "exit-4",
-            category = "safety",
-            required = true,
-            sortOrder = 4,
-        ),
-        templateItem(
-            checklistId = checklistId,
-            description = "Reporte de incidencias: Registrar cualquier novedad del turno",
-            templateId = "exit-5",
-            category = "admin",
-            required = false,
-            sortOrder = 5,
-        ),
-    )
-
-    private fun templateItem(
-        checklistId: String,
-        description: String,
-        templateId: String,
-        category: String,
-        required: Boolean,
-        sortOrder: Int,
-    ): ChecklistItem {
-        val meta = """{"templateId":"$templateId","category":"$category","required":$required}"""
-        return ChecklistItem(
-            checklistId = checklistId,
-            itemDescription = description,
-            notes = meta,
-            sortOrder = sortOrder,
-        )
+    ): List<ChecklistItemInsert> {
+        return CHECKLIST_TEMPLATES
+            .filter { it.type == type }
+            .map { template ->
+                ChecklistItemInsert(
+                    checklistId = checklistId,
+                    itemDescription = "${template.title}: ${template.description}",
+                    notes = """{"templateId":"${template.id}","category":"${template.category}","required":${template.required}}""",
+                )
+            }
     }
 }
 
-/**
- * Exception for PostgREST HTTP errors.
- */
-class PostgRestException(
-    val statusCode: Int,
-    val responseBody: String?,
-) : Exception("PostgREST error $statusCode: ${responseBody?.take(200)}")
+@Serializable
+private data class ChecklistInsert(
+    @SerialName("checklist_type") val type: ChecklistType,
+    @SerialName("checklist_date") val date: String,
+    val status: ChecklistStatus = ChecklistStatus.PENDING,
+)
+
+@Serializable
+private data class ChecklistTypeBackfill(
+    @SerialName("checklist_type") val type: ChecklistType,
+)
+
+@Serializable
+private data class ChecklistCompletionUpdate(
+    val status: ChecklistStatus,
+    @SerialName("completed_by") val completedBy: String? = null,
+    @SerialName("completed_at") val completedAt: String,
+    @SerialName("completion_notes") val completionNotes: String? = null,
+)
+
+@Serializable
+private data class ChecklistItemInsert(
+    @SerialName("checklist_id") val checklistId: String,
+    @SerialName("item_description") val itemDescription: String,
+    @SerialName("is_completed") val isCompleted: Boolean = false,
+    val notes: String? = null,
+)
+
+@Serializable
+private data class ChecklistItemUpdate(
+    @SerialName("is_completed") val isCompleted: Boolean,
+    @SerialName("completed_by") val completedBy: String? = null,
+    @SerialName("completed_at") val completedAt: String? = null,
+)
+
+@Serializable
+private data class IdOnly(
+    val id: String? = null,
+)
+
+private data class ChecklistTemplate(
+    val id: String,
+    val title: String,
+    val description: String,
+    val category: String,
+    val required: Boolean,
+    val type: ChecklistType,
+)
+
+private fun ChecklistType.serializedValue(): String = when (this) {
+    ChecklistType.ENTRADA -> "entrada"
+    ChecklistType.SALIDA -> "salida"
+}
+
+private fun ChecklistStatus.serializedValue(): String = when (this) {
+    ChecklistStatus.PENDING -> "pending"
+    ChecklistStatus.IN_PROGRESS -> "in_progress"
+    ChecklistStatus.COMPLETED -> "completed"
+}
+
+private val CHECKLIST_TEMPLATES = listOf(
+    ChecklistTemplate(
+        id = "entry-1",
+        title = "Revisar nivel de agua",
+        description = "Verificar y registrar el nivel actual del tanque de agua",
+        category = "maintenance",
+        required = true,
+        type = ChecklistType.ENTRADA,
+    ),
+    ChecklistTemplate(
+        id = "entry-2",
+        title = "Registrar caja inicial",
+        description = "Contar y registrar el efectivo inicial del turno",
+        category = "admin",
+        required = true,
+        type = ChecklistType.ENTRADA,
+    ),
+    ChecklistTemplate(
+        id = "entry-3",
+        title = "Verificar suministros",
+        description = "Revisar niveles de jabon, suavizante y otros quimicos",
+        category = "maintenance",
+        required = true,
+        type = ChecklistType.ENTRADA,
+    ),
+    ChecklistTemplate(
+        id = "entry-4",
+        title = "Inspeccionar maquinas",
+        description = "Verificar que todas las lavadoras y secadoras esten funcionando",
+        category = "maintenance",
+        required = true,
+        type = ChecklistType.ENTRADA,
+    ),
+    ChecklistTemplate(
+        id = "entry-5",
+        title = "Limpiar estacion de trabajo",
+        description = "Limpiar y organizar el area de trabajo principal",
+        category = "cleaning",
+        required = true,
+        type = ChecklistType.ENTRADA,
+    ),
+    ChecklistTemplate(
+        id = "entry-6",
+        title = "Revisar tickets pendientes",
+        description = "Verificar tickets del dia anterior y prioridades",
+        category = "admin",
+        required = true,
+        type = ChecklistType.ENTRADA,
+    ),
+    ChecklistTemplate(
+        id = "entry-7",
+        title = "Verificar sistema de seguridad",
+        description = "Comprobar alarmas, camaras y sistemas de emergencia",
+        category = "safety",
+        required = false,
+        type = ChecklistType.ENTRADA,
+    ),
+    ChecklistTemplate(
+        id = "entry-8",
+        title = "Revisar temperatura ambiente",
+        description = "Verificar que la temperatura este en rango optimo",
+        category = "maintenance",
+        required = false,
+        type = ChecklistType.ENTRADA,
+    ),
+    ChecklistTemplate(
+        id = "exit-1",
+        title = "Cerrar caja",
+        description = "Contar efectivo y realizar cierre de caja del turno",
+        category = "admin",
+        required = true,
+        type = ChecklistType.SALIDA,
+    ),
+    ChecklistTemplate(
+        id = "exit-2",
+        title = "Apagar maquinas",
+        description = "Apagar todas las lavadoras y secadoras que no esten en uso",
+        category = "maintenance",
+        required = true,
+        type = ChecklistType.SALIDA,
+    ),
+    ChecklistTemplate(
+        id = "exit-3",
+        title = "Limpiar area de trabajo",
+        description = "Limpiar y organizar toda el area antes de cerrar",
+        category = "cleaning",
+        required = true,
+        type = ChecklistType.SALIDA,
+    ),
+    ChecklistTemplate(
+        id = "exit-4",
+        title = "Dejar notas de tickets pendientes",
+        description = "Documentar para el siguiente turno los tickets pendientes y observaciones clave",
+        category = "admin",
+        required = true,
+        type = ChecklistType.SALIDA,
+    ),
+    ChecklistTemplate(
+        id = "exit-5",
+        title = "Asegurar local",
+        description = "Cerrar puertas, ventanas y activar alarma",
+        category = "safety",
+        required = true,
+        type = ChecklistType.SALIDA,
+    ),
+    ChecklistTemplate(
+        id = "exit-6",
+        title = "Apagar computadora y luces",
+        description = "Apagar computadora/POS y luces (excepto iluminacion de seguridad)",
+        category = "safety",
+        required = true,
+        type = ChecklistType.SALIDA,
+    ),
+    ChecklistTemplate(
+        id = "exit-9",
+        title = "Verificar inventario de agua y caja",
+        description = "Confirmar nivel de agua y corte final de caja antes de retirarse",
+        category = "admin",
+        required = true,
+        type = ChecklistType.SALIDA,
+    ),
+    ChecklistTemplate(
+        id = "exit-7",
+        title = "Revisar banos",
+        description = "Asegurarse de que los banos esten limpios y cerrados",
+        category = "cleaning",
+        required = false,
+        type = ChecklistType.SALIDA,
+    ),
+    ChecklistTemplate(
+        id = "exit-8",
+        title = "Backup de datos",
+        description = "Verificar que los datos del dia esten respaldados",
+        category = "admin",
+        required = false,
+        type = ChecklistType.SALIDA,
+    ),
+)

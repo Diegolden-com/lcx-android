@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.format.DateTimeParseException
 import javax.inject.Inject
 
 data class CreateTicketUiState(
@@ -22,7 +24,14 @@ data class CreateTicketUiState(
     val service: String = "",
     val weight: String = "",
     val notes: String = "",
+    val promisedPickupDate: String = "",
+    val specialInstructions: String = "",
+    val addOns: String = "",
+    val addOnsTotal: String = "",
     val totalAmount: String = "",
+    val paymentStatus: String = "pending",
+    val paymentMethod: String = "card",
+    val paidAmount: String = "",
     val isSubmitting: Boolean = false,
     val error: String? = null,
     val createdTicket: Ticket? = null,
@@ -32,6 +41,11 @@ data class CreateTicketUiState(
 class CreateTicketViewModel @Inject constructor(
     private val repository: TicketRepository,
 ) : ViewModel() {
+
+    private sealed interface ParseDoubleResult {
+        data class Success(val value: Double?) : ParseDoubleResult
+        data object Invalid : ParseDoubleResult
+    }
 
     private val _uiState = MutableStateFlow(CreateTicketUiState())
     val uiState: StateFlow<CreateTicketUiState> = _uiState.asStateFlow()
@@ -60,17 +74,49 @@ class CreateTicketViewModel @Inject constructor(
         _uiState.update { it.copy(notes = value, error = null) }
     }
 
+    fun onPromisedPickupDateChanged(value: String) {
+        _uiState.update { it.copy(promisedPickupDate = value, error = null) }
+    }
+
+    fun onSpecialInstructionsChanged(value: String) {
+        _uiState.update { it.copy(specialInstructions = value, error = null) }
+    }
+
+    fun onAddOnsChanged(value: String) {
+        _uiState.update { it.copy(addOns = value, error = null) }
+    }
+
+    fun onAddOnsTotalChanged(value: String) {
+        _uiState.update { it.copy(addOnsTotal = value, error = null) }
+    }
+
     fun onTotalAmountChanged(value: String) {
         _uiState.update { it.copy(totalAmount = value, error = null) }
+    }
+
+    fun onPaymentStatusChanged(value: String) {
+        _uiState.update {
+            it.copy(
+                paymentStatus = value,
+                error = null,
+                paidAmount = if (value == "pending") "" else it.paidAmount,
+            )
+        }
+    }
+
+    fun onPaymentMethodChanged(value: String) {
+        _uiState.update { it.copy(paymentMethod = value, error = null) }
+    }
+
+    fun onPaidAmountChanged(value: String) {
+        _uiState.update { it.copy(paidAmount = value, error = null) }
     }
 
     fun submit() {
         val state = _uiState.value
 
-        // Idempotency: ignore repeated taps while already submitting
         if (state.isSubmitting) return
 
-        // Validation
         if (state.customerName.isBlank()) {
             _uiState.update { it.copy(error = "El nombre del cliente es obligatorio.") }
             return
@@ -84,22 +130,81 @@ class CreateTicketViewModel @Inject constructor(
             return
         }
 
-        val parsedWeight = if (state.weight.isNotBlank()) {
-            state.weight.toDoubleOrNull()
-                ?: run {
-                    _uiState.update { it.copy(error = "El peso debe ser un numero valido.") }
-                    return
-                }
-        } else {
-            null
+        val parsedWeight = when (
+            val result = parseOptionalDouble(
+            value = state.weight,
+            errorMessage = "El peso debe ser un numero valido.",
+        )
+        ) {
+            is ParseDoubleResult.Success -> result.value
+            ParseDoubleResult.Invalid -> return
         }
 
-        val parsedAmount = if (state.totalAmount.isNotBlank()) {
-            state.totalAmount.toDoubleOrNull()
-                ?: run {
-                    _uiState.update { it.copy(error = "El monto debe ser un numero valido.") }
-                    return
-                }
+        val parsedAddOnsTotal = when (
+            val result = parseOptionalDouble(
+            value = state.addOnsTotal,
+            errorMessage = "El monto de add-ons debe ser un numero valido.",
+        )
+        ) {
+            is ParseDoubleResult.Success -> result.value
+            ParseDoubleResult.Invalid -> return
+        }
+
+        val parsedTotalAmount = when (
+            val result = parseOptionalDouble(
+            value = state.totalAmount,
+            errorMessage = "El monto total debe ser un numero valido.",
+        )
+        ) {
+            is ParseDoubleResult.Success -> result.value
+            ParseDoubleResult.Invalid -> return
+        }
+
+        val parsedPaidAmount = when (
+            val result = parseOptionalDouble(
+            value = state.paidAmount,
+            errorMessage = "El monto pagado debe ser un numero valido.",
+        )
+        ) {
+            is ParseDoubleResult.Success -> result.value
+            ParseDoubleResult.Invalid -> return
+        }
+
+        val promisedPickupDate = state.promisedPickupDate.trim().ifBlank { null }
+        if (promisedPickupDate != null && !isIsoLocalDate(promisedPickupDate)) {
+            _uiState.update { it.copy(error = "La fecha promesa debe usar formato AAAA-MM-DD.") }
+            return
+        }
+
+        if (
+            parsedAddOnsTotal != null &&
+            parsedTotalAmount != null &&
+            parsedAddOnsTotal > parsedTotalAmount
+        ) {
+            _uiState.update { it.copy(error = "Los add-ons no pueden exceder el total.") }
+            return
+        }
+
+        val effectivePaidAmount = when (state.paymentStatus) {
+            "pending" -> null
+            else -> parsedPaidAmount ?: parsedTotalAmount
+        }
+
+        if (state.paymentStatus != "pending" && effectivePaidAmount == null) {
+            _uiState.update {
+                it.copy(error = "Captura el monto pagado o el total del encargo.")
+            }
+            return
+        }
+
+        val addOns = state.addOns
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .ifEmpty { emptyList() }
+
+        val subtotal = if (parsedTotalAmount != null && parsedAddOnsTotal != null) {
+            (parsedTotalAmount - parsedAddOnsTotal).takeIf { it >= 0.0 }
         } else {
             null
         }
@@ -114,7 +219,16 @@ class CreateTicketViewModel @Inject constructor(
                 service = state.service.trim(),
                 weight = parsedWeight,
                 notes = state.notes.trim().ifBlank { null },
-                totalAmount = parsedAmount,
+                totalAmount = parsedTotalAmount,
+                subtotal = subtotal,
+                addOnsTotal = parsedAddOnsTotal,
+                addOns = addOns.ifEmpty { null },
+                promisedPickupDate = promisedPickupDate,
+                specialInstructions = state.specialInstructions.trim().ifBlank { null },
+                paymentMethod = if (state.paymentStatus == "pending") null else state.paymentMethod,
+                paymentStatus = state.paymentStatus,
+                paidAmount = effectivePaidAmount,
+                prepaidAmount = if (state.paymentStatus == "prepaid") effectivePaidAmount else null,
             )
 
             when (val result = repository.createTickets(source = "encargo", tickets = listOf(draft))) {
@@ -123,6 +237,7 @@ class CreateTicketViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             isSubmitting = false,
+                            error = null,
                             createdTicket = ticket,
                         )
                     }
@@ -142,5 +257,30 @@ class CreateTicketViewModel @Inject constructor(
 
     fun clearCreated() {
         _uiState.update { it.copy(createdTicket = null) }
+    }
+
+    private fun parseOptionalDouble(
+        value: String,
+        errorMessage: String,
+    ): ParseDoubleResult {
+        if (value.isBlank()) {
+            return ParseDoubleResult.Success(null)
+        }
+
+        val parsed = value.toDoubleOrNull() ?: run {
+            _uiState.update { it.copy(error = errorMessage) }
+            return ParseDoubleResult.Invalid
+        }
+
+        return ParseDoubleResult.Success(parsed)
+    }
+
+    private fun isIsoLocalDate(value: String): Boolean {
+        return try {
+            LocalDate.parse(value)
+            true
+        } catch (_: DateTimeParseException) {
+            false
+        }
     }
 }

@@ -2,6 +2,7 @@ package com.cleanx.lcx.feature.tickets.ui.list
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,6 +34,7 @@ import com.cleanx.lcx.core.model.Ticket
 import com.cleanx.lcx.core.model.TicketStatus
 import com.cleanx.lcx.core.theme.LcxSpacing
 import com.cleanx.lcx.core.ui.EmptyState
+import com.cleanx.lcx.core.ui.ErrorState
 import com.cleanx.lcx.core.ui.LcxCard
 import com.cleanx.lcx.core.ui.PaymentStatusChip
 import com.cleanx.lcx.core.ui.StatusChip
@@ -97,11 +100,26 @@ fun TicketPresetScreen(
             )
         },
     ) { padding ->
-        if (filteredTickets.isEmpty() && !state.isLoading) {
-            EmptyState(
-                title = "Sin tickets",
+        if (state.isLoading && filteredTickets.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator()
+            }
+        } else if (state.error != null && filteredTickets.isEmpty()) {
+            ErrorState(
+                message = state.error.orEmpty(),
                 modifier = Modifier.padding(padding),
-                description = "No hay tickets en esta categoría",
+                onRetry = viewModel::refresh,
+            )
+        } else if (filteredTickets.isEmpty()) {
+            EmptyState(
+                title = "Sin encargos",
+                modifier = Modifier.padding(padding),
+                description = "No hay encargos en esta categoría",
             )
         } else {
             LazyColumn(

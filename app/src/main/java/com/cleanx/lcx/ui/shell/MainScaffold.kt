@@ -57,6 +57,8 @@ import com.cleanx.lcx.core.navigation.Screen
 import com.cleanx.lcx.core.transaction.ui.TransactionScreen
 import com.cleanx.lcx.feature.cash.ui.CashScreen
 import com.cleanx.lcx.feature.cash.ui.CashViewModel
+import com.cleanx.lcx.feature.checklist.ui.ChecklistScreen as FeatureChecklistScreen
+import com.cleanx.lcx.feature.checklist.ui.ChecklistViewModel
 import com.cleanx.lcx.feature.payments.ui.ChargeScreen
 import com.cleanx.lcx.feature.payments.ui.PaymentDiagnosticsScreen
 import com.cleanx.lcx.feature.printing.data.LabelData
@@ -69,6 +71,8 @@ import com.cleanx.lcx.feature.tickets.ui.detail.TicketDetailViewModel
 import com.cleanx.lcx.feature.tickets.ui.list.TicketListScreen
 import com.cleanx.lcx.feature.tickets.ui.list.TicketListViewModel
 import com.cleanx.lcx.feature.tickets.ui.list.TicketPresetScreen
+import com.cleanx.lcx.feature.water.ui.WaterScreen
+import com.cleanx.lcx.feature.water.ui.WaterViewModel
 import com.cleanx.lcx.ui.more.MoreScreen
 import com.cleanx.lcx.ui.ops.BestPracticesShell
 import com.cleanx.lcx.ui.ops.CalendarEventsShell
@@ -88,9 +92,7 @@ import com.cleanx.lcx.ui.ops.SuppliesInventoryShell
 import com.cleanx.lcx.ui.ops.SuppliesLabelsShell
 import com.cleanx.lcx.ui.ops.SuppliesReportsShell
 import com.cleanx.lcx.ui.ops.VacationsShell
-import com.cleanx.lcx.ui.placeholder.ChecklistScreen
 import com.cleanx.lcx.ui.placeholder.DashboardScreen
-import com.cleanx.lcx.ui.placeholder.WaterScreen
 import kotlinx.coroutines.launch
 
 private data class DrawerItem(
@@ -309,6 +311,9 @@ fun MainScaffold(
                             onCreateTicket = {
                                 tabNavController.navigate(Screen.CreateTicket)
                             },
+                            onOpenPreset = { preset ->
+                                tabNavController.navigate(Screen.TicketPreset(preset = preset))
+                            },
                             onTicketClick = { ticket ->
                                 tabNavController.navigate(
                                     Screen.TicketDetail(ticketId = ticket.id),
@@ -326,13 +331,20 @@ fun MainScaffold(
                             onBack = { tabNavController.popBackStack() },
                             onTicketCreated = { ticket ->
                                 ticketListViewModel.addCreatedTicket(ticket)
+                                tabNavController.popBackStack()
+                                tabNavController.navigate(
+                                    Screen.TicketDetail(
+                                        ticketId = ticket.id,
+                                        quickActions = true,
+                                    ),
+                                )
                             },
-                            onNavigateBack = { tabNavController.popBackStack() },
                         )
                     }
 
-                    composable<Screen.TicketDetail> {
+                    composable<Screen.TicketDetail> { backStackEntry ->
                         val detailViewModel: TicketDetailViewModel = hiltViewModel()
+                        val route = backStackEntry.toRoute<Screen.TicketDetail>()
 
                         val ticketId = detailViewModel.ticketId
                         val existingTicket = remember(ticketId) {
@@ -345,6 +357,7 @@ fun MainScaffold(
 
                         TicketDetailScreen(
                             viewModel = detailViewModel,
+                            showQuickActionsOnLaunch = route.quickActions,
                             onBack = {
                                 val updated = detailViewModel.uiState.value.ticket
                                 if (detailViewModel.uiState.value.ticketUpdated && updated != null) {
@@ -439,13 +452,39 @@ fun MainScaffold(
                 // ── Agua / Checklist / Más (drawer) ─────────────────────
                 navigation<Screen.WaterGraph>(startDestination = Screen.Water) {
                     composable<Screen.Water> {
-                        WaterScreen()
+                        val waterViewModel: WaterViewModel = hiltViewModel()
+                        WaterScreen(
+                            viewModel = waterViewModel,
+                            showTopBar = false,
+                        )
                     }
                 }
 
                 navigation<Screen.ChecklistGraph>(startDestination = Screen.Checklist) {
                     composable<Screen.Checklist> {
-                        ChecklistScreen()
+                        val checklistViewModel: ChecklistViewModel = hiltViewModel()
+                        FeatureChecklistScreen(
+                            viewModel = checklistViewModel,
+                            onNavigateToWater = {
+                                tabNavController.navigate(Screen.WaterGraph) {
+                                    popUpTo(tabNavController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            onNavigateToCash = {
+                                tabNavController.navigate(Screen.CashGraph) {
+                                    popUpTo(tabNavController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            showTopBar = false,
+                        )
                     }
                 }
 

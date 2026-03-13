@@ -3,17 +3,23 @@ package com.cleanx.lcx.feature.checklist.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cleanx.lcx.feature.checklist.data.Checklist
+import com.cleanx.lcx.feature.checklist.data.ChecklistItem
 import com.cleanx.lcx.feature.checklist.data.ChecklistItemUi
 import com.cleanx.lcx.feature.checklist.data.ChecklistRepository
 import com.cleanx.lcx.feature.checklist.data.ChecklistStatus
 import com.cleanx.lcx.feature.checklist.data.ChecklistType
-import com.cleanx.lcx.feature.checklist.data.SYSTEM_VALIDATED_TEMPLATES
-import com.cleanx.lcx.feature.checklist.data.TEMPLATE_CASH_REGISTER
+import com.cleanx.lcx.feature.checklist.data.TEMPLATE_CLOSING_CASH
+import com.cleanx.lcx.feature.checklist.data.TEMPLATE_OPENING_CASH
 import com.cleanx.lcx.feature.checklist.data.TEMPLATE_WATER_LEVEL
 import com.cleanx.lcx.feature.checklist.data.canCompleteChecklist
 import com.cleanx.lcx.feature.checklist.data.getChecklistProgress
+import com.cleanx.lcx.feature.checklist.data.parseMetadata
 import com.cleanx.lcx.feature.checklist.data.requiredItemCounts
+import com.cleanx.lcx.feature.checklist.data.sortChecklistItems
+import com.cleanx.lcx.feature.checklist.data.sortChecklistUiItems
 import com.cleanx.lcx.feature.checklist.data.toUi
+import com.cleanx.lcx.core.session.SessionProfile
+import com.cleanx.lcx.core.session.SessionProfileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,6 +67,7 @@ data class ChecklistUiState(
     // Operational routine status (auto-validation)
     val waterLevelRecorded: Boolean = false,
     val cashRegisterOpened: Boolean = false,
+    val cashRegisterClosed: Boolean = false,
 )
 
 // ---------------------------------------------------------------------------
@@ -70,24 +77,79 @@ data class ChecklistUiState(
 @HiltViewModel
 class ChecklistViewModel @Inject constructor(
     private val repository: ChecklistRepository,
+    private val sessionProfileRepository: SessionProfileRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChecklistUiState())
     val uiState: StateFlow<ChecklistUiState> = _uiState.asStateFlow()
 
-    init {
-        loadEntryChecklist()
-    }
+    private var sessionProfile: SessionProfile? = null
 
     // -- TAB SELECTION --------------------------------------------------------
 
     fun selectTab(index: Int) {
         _uiState.update { it.copy(selectedTab = index) }
-        when (index) {
-            0 -> if (_uiState.value.entryChecklist == null) loadEntryChecklist()
-            1 -> if (_uiState.value.exitChecklist == null) loadExitChecklist()
-            2 -> if (_uiState.value.history.isEmpty()) loadHistory()
+        refreshSelectedTab()
+    }
+
+    fun refreshSelectedTab() {
+        when (_uiState.value.selectedTab) {
+            0 -> loadEntryChecklist()
+            1 -> loadExitChecklist()
+            2 -> loadHistory()
         }
+    }
+
+    private suspend fun resolveSessionProfile(): SessionProfile {
+        return sessionProfile ?: sessionProfileRepository.getCurrentProfile().also {
+            sessionProfile = it
+        }
+    }
+
+    private fun handleSessionFailure(
+        error: Throwable,
+        transform: ChecklistUiState.(String) -> ChecklistUiState,
+    ) {
+        val message = error.message ?: "No se pudo resolver la sesion actual."
+        Timber.e(error, "Failed to resolve current session profile")
+        _uiState.update { state -> state.transform(message) }
+    }
+
+    private fun ChecklistUiState.withEntryError(message: String): ChecklistUiState =
+        copy(isLoadingEntry = false, entryError = message)
+
+    private fun ChecklistUiState.withExitError(message: String): ChecklistUiState =
+        copy(isLoadingExit = false, exitError = message)
+
+    private suspend fun syncSystemItems(
+        items: List<ChecklistItem>,
+        userId: String,
+        expectedCompletion: Map<String, Boolean>,
+    ): List<ChecklistItem> {
+        var currentItems = items
+
+        for (item in items) {
+            val templateId = item.parseMetadata().templateId ?: continue
+            val shouldBeCompleted = expectedCompletion[templateId] ?: continue
+            if (item.isCompleted == shouldBeCompleted) continue
+
+            val itemId = item.id ?: continue
+            repository.updateChecklistItem(itemId, shouldBeCompleted, userId)
+                .onSuccess { updatedItem ->
+                    currentItems = currentItems.map { existing ->
+                        if (existing.id == itemId) updatedItem else existing
+                    }
+                }
+                .onFailure { error ->
+                    Timber.w(error, "Failed to sync system checklist item %s", itemId)
+                }
+        }
+
+        return sortChecklistItems(currentItems)
+    }
+
+    private fun toUiItems(items: List<ChecklistItem>): List<ChecklistItemUi> {
+        return sortChecklistItems(items).map { it.toUi() }
     }
 
     // -- ENTRY CHECKLIST ------------------------------------------------------
@@ -96,28 +158,26 @@ class ChecklistViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(isLoadingEntry = true, entryError = null) }
 
-            // Load operational routine status in parallel
-            val waterDone = repository.hasWaterLevelToday()
-            val cashDone = repository.hasCashRegisterToday()
+            val profile = runCatching { resolveSessionProfile() }
+                .getOrElse { error ->
+                    handleSessionFailure(error) { message -> withEntryError(message) }
+                    return@launch
+                }
+
+            val waterDone = repository.hasWaterLevelToday(profile.branch)
+            val cashDone = repository.hasCashMovementToday(CASH_MOVEMENT_OPENING)
 
             repository.getTodayChecklist(ChecklistType.ENTRADA)
                 .onSuccess { (checklist, items) ->
-                    val uiItems = items.map { item ->
-                        val ui = item.toUi()
-                        // Auto-validate system items
-                        if (ui.isSystemValidated) {
-                            val autoCompleted = when (ui.metadata.templateId) {
-                                TEMPLATE_WATER_LEVEL -> waterDone
-                                TEMPLATE_CASH_REGISTER -> cashDone
-                                else -> ui.item.isCompleted
-                            }
-                            ui.copy(
-                                item = ui.item.copy(isCompleted = autoCompleted)
-                            )
-                        } else {
-                            ui
-                        }
-                    }
+                    val syncedItems = syncSystemItems(
+                        items = items,
+                        userId = profile.userId,
+                        expectedCompletion = mapOf(
+                            TEMPLATE_WATER_LEVEL to waterDone,
+                            TEMPLATE_OPENING_CASH to cashDone,
+                        ),
+                    )
+                    val uiItems = toUiItems(syncedItems)
                     val (done, total) = requiredItemCounts(uiItems)
 
                     _uiState.update {
@@ -138,9 +198,8 @@ class ChecklistViewModel @Inject constructor(
                 .onFailure { error ->
                     Timber.e(error, "Failed to load entry checklist")
                     _uiState.update {
-                        it.copy(
-                            isLoadingEntry = false,
-                            entryError = error.message ?: "Error al cargar checklist de entrada",
+                        it.withEntryError(
+                            error.message ?: "Error al cargar checklist de entrada",
                         )
                     }
                 }
@@ -153,9 +212,22 @@ class ChecklistViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(isLoadingExit = true, exitError = null) }
 
+            val profile = runCatching { resolveSessionProfile() }
+                .getOrElse { error ->
+                    handleSessionFailure(error) { message -> withExitError(message) }
+                    return@launch
+                }
+
+            val cashDone = repository.hasCashMovementToday(CASH_MOVEMENT_CLOSING)
+
             repository.getTodayChecklist(ChecklistType.SALIDA)
                 .onSuccess { (checklist, items) ->
-                    val uiItems = items.map { it.toUi() }
+                    val syncedItems = syncSystemItems(
+                        items = items,
+                        userId = profile.userId,
+                        expectedCompletion = mapOf(TEMPLATE_CLOSING_CASH to cashDone),
+                    )
+                    val uiItems = toUiItems(syncedItems)
                     val (done, total) = requiredItemCounts(uiItems)
 
                     _uiState.update {
@@ -168,15 +240,15 @@ class ChecklistViewModel @Inject constructor(
                             exitRequiredTotal = total,
                             exitCanComplete = canCompleteChecklist(uiItems)
                                 && checklist.status != ChecklistStatus.COMPLETED,
+                            cashRegisterClosed = cashDone,
                         )
                     }
                 }
                 .onFailure { error ->
                     Timber.e(error, "Failed to load exit checklist")
                     _uiState.update {
-                        it.copy(
-                            isLoadingExit = false,
-                            exitError = error.message ?: "Error al cargar checklist de salida",
+                        it.withExitError(
+                            error.message ?: "Error al cargar checklist de salida",
                         )
                     }
                 }
@@ -202,7 +274,19 @@ class ChecklistViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(isSaving = true) }
 
-            repository.updateChecklistItem(itemId, newCompleted)
+            val profile = runCatching { resolveSessionProfile() }
+                .getOrElse { error ->
+                    _uiState.update {
+                        it.copy(
+                            isSaving = false,
+                            completedMessage = error.message
+                                ?: "No se pudo resolver la sesion actual.",
+                        )
+                    }
+                    return@launch
+                }
+
+            repository.updateChecklistItem(itemId, newCompleted, profile.userId)
                 .onSuccess { updatedItem ->
                     updateItemInState(updatedItem.toUi(), type)
                 }
@@ -241,7 +325,19 @@ class ChecklistViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(isCompleting = true) }
 
-            repository.completeChecklist(checklistId, notes)
+            val profile = runCatching { resolveSessionProfile() }
+                .getOrElse { error ->
+                    _uiState.update {
+                        it.copy(
+                            isCompleting = false,
+                            completedMessage = error.message
+                                ?: "No se pudo resolver la sesion actual.",
+                        )
+                    }
+                    return@launch
+                }
+
+            repository.completeChecklist(checklistId, notes, profile.userId)
                 .onSuccess { updatedChecklist ->
                     val label = when (type) {
                         ChecklistType.ENTRADA -> "entrada"
@@ -322,7 +418,7 @@ class ChecklistViewModel @Inject constructor(
                 ChecklistType.ENTRADA -> {
                     val newItems = state.entryItems.map { existing ->
                         if (existing.item.id == updatedUi.item.id) updatedUi else existing
-                    }
+                    }.let(::sortChecklistUiItems)
                     val (done, total) = requiredItemCounts(newItems)
                     state.copy(
                         entryItems = newItems,
@@ -336,7 +432,7 @@ class ChecklistViewModel @Inject constructor(
                 ChecklistType.SALIDA -> {
                     val newItems = state.exitItems.map { existing ->
                         if (existing.item.id == updatedUi.item.id) updatedUi else existing
-                    }
+                    }.let(::sortChecklistUiItems)
                     val (done, total) = requiredItemCounts(newItems)
                     state.copy(
                         exitItems = newItems,
@@ -349,5 +445,10 @@ class ChecklistViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    companion object {
+        private const val CASH_MOVEMENT_OPENING = "opening"
+        private const val CASH_MOVEMENT_CLOSING = "closing"
     }
 }

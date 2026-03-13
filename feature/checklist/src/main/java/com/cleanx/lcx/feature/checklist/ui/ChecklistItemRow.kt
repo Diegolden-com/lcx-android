@@ -30,7 +30,8 @@ import com.cleanx.lcx.core.theme.LcxSpacing
 import com.cleanx.lcx.feature.checklist.data.ChecklistItemUi
 import com.cleanx.lcx.feature.checklist.data.ChecklistStatus
 import com.cleanx.lcx.feature.checklist.data.ItemCategory
-import com.cleanx.lcx.feature.checklist.data.TEMPLATE_CASH_REGISTER
+import com.cleanx.lcx.feature.checklist.data.TEMPLATE_CLOSING_CASH
+import com.cleanx.lcx.feature.checklist.data.TEMPLATE_OPENING_CASH
 import com.cleanx.lcx.feature.checklist.data.TEMPLATE_WATER_LEVEL
 
 // ---------------------------------------------------------------------------
@@ -156,10 +157,15 @@ fun ChecklistItemRow(
                     } else {
                         "Pendiente: registrar nivel de agua"
                     }
-                    TEMPLATE_CASH_REGISTER -> if (isCompleted) {
-                        "Caja registradora abierta hoy"
+                    TEMPLATE_OPENING_CASH -> if (isCompleted) {
+                        "Apertura de caja registrada hoy"
                     } else {
-                        "Pendiente: abrir caja registradora"
+                        "Pendiente: registrar apertura de caja"
+                    }
+                    TEMPLATE_CLOSING_CASH -> if (isCompleted) {
+                        "Corte de caja registrado hoy"
+                    } else {
+                        "Pendiente: registrar corte de caja"
                     }
                     else -> null
                 }
@@ -180,12 +186,14 @@ fun ChecklistItemRow(
             if (itemUi.isSystemValidated && !isCompleted) {
                 val actionRoute = when (itemUi.metadata.templateId) {
                     TEMPLATE_WATER_LEVEL -> "water"
-                    TEMPLATE_CASH_REGISTER -> "cash"
+                    TEMPLATE_OPENING_CASH -> "cash"
+                    TEMPLATE_CLOSING_CASH -> "cash"
                     else -> null
                 }
                 val actionLabel = when (itemUi.metadata.templateId) {
                     TEMPLATE_WATER_LEVEL -> "Registrar nivel de agua"
-                    TEMPLATE_CASH_REGISTER -> "Abrir caja registradora"
+                    TEMPLATE_OPENING_CASH -> "Registrar apertura de caja"
+                    TEMPLATE_CLOSING_CASH -> "Registrar corte de caja"
                     else -> null
                 }
                 if (actionRoute != null && actionLabel != null && onActionClick != null) {

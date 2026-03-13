@@ -43,9 +43,8 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
-    // Network (PostgREST via OkHttp)
-    implementation(libs.retrofit)
-    implementation(libs.okhttp)
+    // Supabase (direct table access via SupabaseTableClient in :core)
+    implementation(libs.supabase.postgrest)
 
     // Serialization
     implementation(libs.kotlinx.serialization.json)

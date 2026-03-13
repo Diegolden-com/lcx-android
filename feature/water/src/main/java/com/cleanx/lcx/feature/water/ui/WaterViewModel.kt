@@ -3,6 +3,8 @@ package com.cleanx.lcx.feature.water.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cleanx.lcx.core.model.WaterLevelStatus
+import com.cleanx.lcx.core.session.SessionProfile
+import com.cleanx.lcx.core.session.SessionProfileRepository
 import com.cleanx.lcx.feature.water.data.TANK_CAPACITY_LITERS
 import com.cleanx.lcx.feature.water.data.WATER_PROVIDERS
 import com.cleanx.lcx.feature.water.data.WaterLevelWithUser
@@ -65,10 +67,12 @@ data class WaterUiState(
 @HiltViewModel
 class WaterViewModel @Inject constructor(
     private val repository: WaterRepository,
+    private val sessionProfileRepository: SessionProfileRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WaterUiState())
     val uiState: StateFlow<WaterUiState> = _uiState.asStateFlow()
+    private var sessionProfile: SessionProfile? = null
 
     init {
         loadCurrentLevel()
@@ -84,7 +88,18 @@ class WaterViewModel @Inject constructor(
     fun loadCurrentLevel() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            repository.getCurrentWaterLevel()
+            val context = requireSessionProfile().getOrElse { error ->
+                Timber.e(error, "Failed to resolve session profile for water current level")
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = error.message ?: "No se pudo resolver la sucursal activa",
+                    )
+                }
+                return@launch
+            }
+
+            repository.getCurrentWaterLevel(branch = context.branch)
                 .onSuccess { record ->
                     val percentage = record?.levelPercentage ?: 0
                     val liters = record?.liters ?: 0
@@ -168,8 +183,21 @@ class WaterViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, saveError = null, saveSuccess = false) }
             val state = _uiState.value
+            val context = requireSessionProfile().getOrElse { error ->
+                Timber.e(error, "Failed to resolve session profile for water save")
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        saveError = error.message ?: "No se pudo resolver la sucursal activa",
+                    )
+                }
+                return@launch
+            }
+
             repository.recordWaterLevel(
                 percentage = state.inputPercentage,
+                recordedBy = context.userId,
+                branch = context.branch,
             ).onSuccess {
                 Timber.d("Water level saved: %d%%", state.inputPercentage)
                 _uiState.update {
@@ -204,7 +232,18 @@ class WaterViewModel @Inject constructor(
     fun loadHistory() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingHistory = true, historyError = null) }
-            repository.getWaterLevelHistory()
+            val context = requireSessionProfile().getOrElse { error ->
+                Timber.e(error, "Failed to resolve session profile for water history")
+                _uiState.update {
+                    it.copy(
+                        isLoadingHistory = false,
+                        historyError = error.message ?: "No se pudo resolver la sucursal activa",
+                    )
+                }
+                return@launch
+            }
+
+            repository.getWaterLevelHistory(branch = context.branch)
                 .onSuccess { records ->
                     _uiState.update {
                         it.copy(
@@ -241,9 +280,22 @@ class WaterViewModel @Inject constructor(
         val provider = _uiState.value.selectedProvider ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(isOrdering = true, orderError = null, orderSuccess = false) }
+            val context = requireSessionProfile().getOrElse { error ->
+                Timber.e(error, "Failed to resolve session profile for water order")
+                _uiState.update {
+                    it.copy(
+                        isOrdering = false,
+                        orderError = error.message ?: "No se pudo resolver la sucursal activa",
+                    )
+                }
+                return@launch
+            }
+
             repository.recordWaterOrder(
                 provider = provider,
                 currentPercentage = _uiState.value.currentPercentage,
+                recordedBy = context.userId,
+                branch = context.branch,
             ).onSuccess {
                 Timber.d("Water order recorded: %s", provider.name)
                 _uiState.update {
@@ -281,5 +333,15 @@ class WaterViewModel @Inject constructor(
 
     fun clearOrderError() {
         _uiState.update { it.copy(orderError = null) }
+    }
+
+    private suspend fun requireSessionProfile(): Result<SessionProfile> {
+        sessionProfile?.let { return Result.success(it) }
+
+        return runCatching {
+            sessionProfileRepository.getCurrentProfile().also { profile ->
+                sessionProfile = profile
+            }
+        }
     }
 }

@@ -45,6 +45,7 @@ dependencies {
 
     // Network
     implementation(libs.retrofit)
+    implementation(libs.supabase.postgrest)
 
     // Serialization
     implementation(libs.kotlinx.serialization.json)
