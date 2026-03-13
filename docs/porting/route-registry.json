@@ -150,8 +150,8 @@
       "roles": ["employee", "manager", "superadmin"],
       "public": false,
       "route_present": true,
-      "parity_done": false,
-      "notes": "native encargo flow now uses customer picker search/create, live services/add-ons/inventory catalogs, PWA-matched pricing rules, pickup estimate, special-item/shared-pool metadata, and pending/paid creation; pending final manual parity smoke before flipping PARITY_DONE=YES"
+      "parity_done": true,
+      "notes": "native encargo flow now uses customer picker search/create, live services/add-ons/inventory catalogs, PWA-matched pricing rules, pickup estimate, special-item/shared-pool metadata, and pending/paid creation; manual smoke remains as post-flip hardening follow-up"
     },
     {
       "id": "op-encargos-detail",

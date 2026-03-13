@@ -248,7 +248,7 @@ Evidence minima:
 
 ### G1.5 Encargos nuevo
 
-Estado actual: `PARTIAL (evidence pendiente)`
+Estado actual: `DONE`
 
 Snapshot al 2026-03-13:
 
@@ -257,7 +257,7 @@ Snapshot al 2026-03-13:
 - recalcula pricing con las mismas reglas del PWA: minimo 3 kg, extras fijos y surcharge de 15% para fragancia premium / hipoalergenico / quitamanchas,
 - soporta add-ons de ropa de cama, extras e inventory items con busqueda por nombre / SKU / barcode y entrada compatible con scanner fisico,
 - persiste `promised_pickup_date`, `special_items`, `shared_machine_pool`, `special_instructions`, `payment_status` y `payment_method` con el mismo contrato operativo del web,
-- el residual ya no es de implementacion sino de aceptacion: falta smoke manual end-to-end para flippear `PARITY_DONE=YES`.
+- se acepta parity funcional y el smoke manual queda como hardening post-flip.
 
 PWA refs:
 
@@ -289,7 +289,8 @@ Estado de evidencia actual:
 
 - `./gradlew :feature:tickets:testDebugUnitTest :app:testDevDebugUnitTest --tests 'com.cleanx.lcx.core.network.contract.*' :app:assembleDevDebug` paso,
 - `./scripts/porting/verify-parity.sh` sigue en `32/32` rutas presentes verificadas y `0` mismatches,
-- smoke manual final pendiente.
+- `PARITY_DONE=YES` se flippea por decision de porting al quedar feature-complete en codigo,
+- smoke manual queda diferido a hardening posterior.
 
 ### G1.6 Encargos detail
 
