@@ -85,7 +85,7 @@
       "public": false,
       "route_present": true,
       "parity_done": false,
-      "notes": "feature wired to Screen.Water; current scope resolves branch from the signed-in profile and persists recorded_by/branch on writes"
+      "notes": "feature wired to Screen.Water; current scope resolves branch from the signed-in profile, persists recorded_by/branch on writes, and now mirrors the PWA default empty-state snapshot with 75%/optimal when the branch has no prior water records; parity stays false until a manual post-login smoke validates save level + order water + history refresh with a valid operator QA session"
     },
     {
       "id": "op-caja-registrar",

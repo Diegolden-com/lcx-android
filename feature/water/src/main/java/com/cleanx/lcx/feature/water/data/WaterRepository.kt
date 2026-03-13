@@ -11,6 +11,10 @@ import javax.inject.Singleton
 
 /** Tank capacity in liters, matching the PWA constant. */
 const val TANK_CAPACITY_LITERS = 10_000
+const val DEFAULT_WATER_LEVEL_PERCENTAGE = 75
+
+private const val DEFAULT_WATER_ACTION = "Nivel inicial"
+private const val RECORDED_WATER_ACTION = "Nivel registrado"
 
 /**
  * Extended model for water_levels rows joined with profiles.
@@ -81,7 +85,9 @@ class WaterRepository @Inject constructor(
             }
             order("created_at", io.github.jan.supabase.postgrest.query.Order.DESCENDING)
             limit(1)
-        }.map { it.firstOrNull() }
+        }.map { rows ->
+            rows.firstOrNull() ?: defaultWaterLevel(branch = branch)
+        }
     }
 
     /**
@@ -119,16 +125,12 @@ class WaterRepository @Inject constructor(
         notes: String? = null,
     ): Result<WaterLevelInsert> {
         val liters = (percentage * TANK_CAPACITY_LITERS) / 100
-        val status = percentageToStatus(percentage)
         Timber.d(
             "Recording water level: %d%% (%d L), status=%s",
-            percentage, liters, status,
+            percentage, liters, percentageToStatus(percentage),
         )
-        val insert = WaterLevelInsert(
-            levelPercentage = percentage,
-            liters = liters,
-            status = status,
-            action = "Nivel actualizado",
+        val insert = buildWaterLevelInsert(
+            percentage = percentage,
             recordedBy = recordedBy,
             branch = branch,
             notes = notes,
@@ -146,19 +148,13 @@ class WaterRepository @Inject constructor(
         recordedBy: String? = null,
         branch: String? = null,
     ): Result<WaterLevelInsert> {
-        val liters = (currentPercentage * TANK_CAPACITY_LITERS) / 100
-        val status = percentageToStatus(currentPercentage)
         Timber.d(
             "Recording water order: provider=%s, level=%d%%",
             provider.name, currentPercentage,
         )
-        val insert = WaterLevelInsert(
-            levelPercentage = currentPercentage,
-            liters = liters,
-            status = status,
-            action = "Agua pedida - ${provider.name}",
-            providerId = provider.id,
-            providerName = provider.name,
+        val insert = buildWaterOrderInsert(
+            provider = provider,
+            currentPercentage = currentPercentage,
             recordedBy = recordedBy,
             branch = branch,
         )
@@ -173,4 +169,54 @@ class WaterRepository @Inject constructor(
             else -> WaterLevelStatus.OPTIMAL
         }
     }
+}
+
+internal fun defaultWaterLevel(branch: String?): WaterLevelWithUser {
+    val liters = (DEFAULT_WATER_LEVEL_PERCENTAGE * TANK_CAPACITY_LITERS) / 100
+    return WaterLevelWithUser(
+        id = "default",
+        levelPercentage = DEFAULT_WATER_LEVEL_PERCENTAGE,
+        liters = liters,
+        tankCapacity = TANK_CAPACITY_LITERS,
+        status = WaterRepository.percentageToStatus(DEFAULT_WATER_LEVEL_PERCENTAGE),
+        action = DEFAULT_WATER_ACTION,
+        branch = branch,
+    )
+}
+
+internal fun buildWaterLevelInsert(
+    percentage: Int,
+    recordedBy: String?,
+    branch: String?,
+    notes: String? = null,
+): WaterLevelInsert {
+    val liters = (percentage * TANK_CAPACITY_LITERS) / 100
+    return WaterLevelInsert(
+        levelPercentage = percentage,
+        liters = liters,
+        status = WaterRepository.percentageToStatus(percentage),
+        action = RECORDED_WATER_ACTION,
+        recordedBy = recordedBy,
+        branch = branch,
+        notes = notes,
+    )
+}
+
+internal fun buildWaterOrderInsert(
+    provider: WaterProvider,
+    currentPercentage: Int,
+    recordedBy: String?,
+    branch: String?,
+): WaterLevelInsert {
+    val liters = (currentPercentage * TANK_CAPACITY_LITERS) / 100
+    return WaterLevelInsert(
+        levelPercentage = currentPercentage,
+        liters = liters,
+        status = WaterRepository.percentageToStatus(currentPercentage),
+        action = "Agua pedida - ${provider.name}",
+        providerId = provider.id,
+        providerName = provider.name,
+        recordedBy = recordedBy,
+        branch = branch,
+    )
 }

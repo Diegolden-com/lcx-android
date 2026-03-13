@@ -187,6 +187,19 @@ Evidence minima:
 - tests unitarios/repo para branch scoping e inserts
 - smoke manual: save level + order water + refresh history
 
+Estado al 2026-03-13:
+
+- `Screen.Water` ya monta la feature real con tabs de nivel actual + historial y CTA de pedir agua cuando el tanque cae a critico,
+- lecturas y escrituras siguen resolviendo `branch` y `recorded_by` desde el perfil autenticado,
+- el snapshot inicial ahora replica el comportamiento del PWA cuando no hay registros previos: Android arranca en `75% / optimal` en vez de caer en falso `0% / critical`,
+- la capa `feature/water:data` ya tiene tests puros para snapshot inicial e inserts (`recorded_by`, `branch`, action label y provider payload) y deja evidencia de que el contrato escrito sigue alineado con PWA.
+
+Residual exacto para flippear a `DONE`:
+
+- falta smoke manual real `save level -> order water -> refresh history` con una sesion de operador valida para confirmar el flujo completo en el entorno,
+- el bloqueo vigente sigue siendo de entorno, no de wiring base: el workspace actual no incluye credenciales o fixture de QA para autenticarse y ejecutar el loop post-login,
+- selector explicito de sucursal para manager/superadmin, cache offline y audit log siguen fuera de G1 y no bloquean paridad operativa minima.
+
 ### G1.3 Caja
 
 Estado actual: `PARTIAL`
