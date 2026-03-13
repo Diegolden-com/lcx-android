@@ -42,6 +42,7 @@ Estados de trabajo usados por este gate:
 - Ticket detail con carga en frio, quick actions nativas post-create, avance de estado, mark-as-paid, SMS, charge y print.
 - Ticket create ampliado con pago al crear, fecha promesa, indicaciones especiales y add-ons manuales.
 - Ticket preset screens (`active`, `ready`, `completed`, `all`) discoverable desde Encargos.
+- Ventas autoservicio nativa con customer picker, cliente anonimo, carrito mixto y create batch `source=venta`.
 - Flujo de charge + print + transaction orchestration.
 - Caja como tab funcional con registrar + historial.
 - Agua conectada al feature real, con scoping por `profile.branch` y persistencia de `recorded_by` / `branch`.
@@ -53,7 +54,6 @@ Estados de trabajo usados por este gate:
 
 ### 3.3 Expuesto solo como shell
 
-- Ventas.
 - Incidentes nuevo / historial.
 - Turnos control / historial / horario / reportes.
 - Ropa danada nuevo / historial.
@@ -344,7 +344,7 @@ Evidence minima:
 
 ### G1.8 Ventas autoservicio
 
-Estado actual: `SHELL`
+Estado actual: `PARTIAL`
 
 PWA refs:
 
@@ -363,7 +363,24 @@ Done when:
 Evidence minima:
 
 - `./gradlew :app:assembleDevDebug`
+- `./gradlew :feature:sales:test`
 - smoke manual con venta mixta de equipo + producto
+
+Estado al 2026-03-13:
+
+- `Screen.Sales` ya monta una feature nativa real sobre `feature/sales`,
+- reutiliza `feature/tickets` para customer picker buscar/crear, validacion de duplicados y catalogos live,
+- soporta cliente anonimo (`Cliente anónimo` / `0000000000`) y customer picker normal,
+- replica el contrato PWA de catalogos: equipos `MAQUINARIA`/lavadora/secadora/combo/centrifugado, productos sin ropa de cama, inventario vendible filtrado por `quantity > 0`, `is_for_sale = true`, `price > 0`,
+- soporta carrito mixto con equipo + add-ons + inventario vendible en la misma venta,
+- arma tickets `source=venta` equivalentes al PWA: un ticket por equipo y un ticket consolidado `Venta Productos` para productos/inventario,
+- pago nativo: efectivo/transfer persisten directo como `paid`; tarjeta cobra primero en la terminal nativa y luego crea el batch `venta`,
+- si tarjeta cobra pero `POST /api/tickets` falla, la UI deja estado critico con `transactionId` y `correlationId` para conciliacion manual en vez de reintentar a ciegas y duplicar ventas.
+
+Residual exacto para flippear a `DONE`:
+
+- falta smoke manual en Android con una venta mixta real: cliente anonimo o seleccionado, equipo + producto, y validacion final de los tickets generados,
+- falta smoke manual especifico del path tarjeta para confirmar UX/operacion con la terminal disponible del entorno.
 
 ### G1.9 Role access completo de operador
 

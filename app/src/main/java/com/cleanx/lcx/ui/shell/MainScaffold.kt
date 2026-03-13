@@ -64,6 +64,8 @@ import com.cleanx.lcx.feature.payments.ui.PaymentDiagnosticsScreen
 import com.cleanx.lcx.feature.printing.data.LabelData
 import com.cleanx.lcx.feature.printing.ui.PrintScreen
 import com.cleanx.lcx.feature.printing.ui.PrintViewModel
+import com.cleanx.lcx.feature.sales.ui.SalesScreen
+import com.cleanx.lcx.feature.sales.ui.SalesViewModel
 import com.cleanx.lcx.feature.tickets.ui.create.CreateTicketScreen
 import com.cleanx.lcx.feature.tickets.ui.create.CreateTicketViewModel
 import com.cleanx.lcx.feature.tickets.ui.detail.TicketDetailScreen
@@ -82,7 +84,6 @@ import com.cleanx.lcx.ui.ops.DamagedClothingNewShell
 import com.cleanx.lcx.ui.ops.HelpShell
 import com.cleanx.lcx.ui.ops.IncidentsHistoryShell
 import com.cleanx.lcx.ui.ops.IncidentsNewShell
-import com.cleanx.lcx.ui.ops.SalesShell
 import com.cleanx.lcx.ui.ops.ShiftsControlShell
 import com.cleanx.lcx.ui.ops.ShiftsHistoryShell
 import com.cleanx.lcx.ui.ops.ShiftsReportsShell
@@ -296,8 +297,9 @@ fun MainScaffold(
                 // ── Ventas ───────────────────────────────────────────────
                 navigation<Screen.SalesGraph>(startDestination = Screen.Sales) {
                     composable<Screen.Sales> {
-                        SalesShell(
-                            onBack = {},
+                        val salesViewModel: SalesViewModel = hiltViewModel()
+                        SalesScreen(
+                            viewModel = salesViewModel,
                             showTopBar = false,
                         )
                     }
@@ -500,9 +502,6 @@ fun MainScaffold(
                         )
                     }
 
-                    composable<Screen.Sales> {
-                        SalesShell(onBack = { tabNavController.popBackStack() })
-                    }
                     composable<Screen.IncidentsNew> {
                         IncidentsNewShell(onBack = { tabNavController.popBackStack() })
                     }

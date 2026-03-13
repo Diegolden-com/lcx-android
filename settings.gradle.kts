@@ -25,6 +25,7 @@ include(
     ":core",
     ":feature:auth",
     ":feature:tickets",
+    ":feature:sales",
     ":feature:loyalty",
     ":feature:payments",
     ":feature:printing",

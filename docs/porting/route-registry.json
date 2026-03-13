@@ -217,7 +217,7 @@
       "public": false,
       "route_present": true,
       "parity_done": false,
-      "notes": "shell"
+      "notes": "native sales feature now loads live equipment/add-on/sellable inventory catalogs, supports customer search/create plus anonymous customer, builds mixed-cart source=venta batches with one ticket per equipment item plus a consolidated product ticket, and uses native payment selection (cash/transfer direct, card via terminal with explicit critical-recovery UX); manual smoke is still pending before parity flip"
     },
     {
       "id": "op-incidentes-nuevo",

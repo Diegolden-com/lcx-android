@@ -63,7 +63,7 @@ private fun buildSections(): List<MoreSection> = listOf(
     MoreSection(
         title = "Ventas",
         items = listOf(
-            MoreItem("Ventas", Icons.Filled.PointOfSale, Screen.Sales),
+            MoreItem("Ventas", Icons.Filled.PointOfSale, Screen.SalesGraph),
         ),
     ),
     MoreSection(
