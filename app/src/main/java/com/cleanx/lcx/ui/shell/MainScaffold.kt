@@ -75,6 +75,8 @@ import com.cleanx.lcx.feature.tickets.ui.list.TicketListViewModel
 import com.cleanx.lcx.feature.tickets.ui.list.TicketPresetScreen
 import com.cleanx.lcx.feature.water.ui.WaterScreen
 import com.cleanx.lcx.feature.water.ui.WaterViewModel
+import com.cleanx.lcx.ui.dashboard.DashboardScreen
+import com.cleanx.lcx.ui.dashboard.DashboardViewModel
 import com.cleanx.lcx.ui.more.MoreScreen
 import com.cleanx.lcx.ui.ops.BestPracticesShell
 import com.cleanx.lcx.ui.ops.CalendarEventsShell
@@ -93,7 +95,6 @@ import com.cleanx.lcx.ui.ops.SuppliesInventoryShell
 import com.cleanx.lcx.ui.ops.SuppliesLabelsShell
 import com.cleanx.lcx.ui.ops.SuppliesReportsShell
 import com.cleanx.lcx.ui.ops.VacationsShell
-import com.cleanx.lcx.ui.placeholder.DashboardScreen
 import kotlinx.coroutines.launch
 
 private data class DrawerItem(
@@ -290,7 +291,43 @@ fun MainScaffold(
                 // ── Inicio ───────────────────────────────────────────────
                 navigation<Screen.DashboardGraph>(startDestination = Screen.Dashboard) {
                     composable<Screen.Dashboard> {
-                        DashboardScreen()
+                        val dashboardViewModel: DashboardViewModel = hiltViewModel()
+                        DashboardScreen(
+                            viewModel = dashboardViewModel,
+                            onOpenChecklist = {
+                                tabNavController.navigate(Screen.ChecklistGraph) {
+                                    popUpTo(tabNavController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            onOpenWater = {
+                                tabNavController.navigate(Screen.WaterGraph) {
+                                    popUpTo(tabNavController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            onOpenCash = {
+                                tabNavController.navigate(Screen.CashGraph) {
+                                    popUpTo(tabNavController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            onOpenCreateTicket = {
+                                tabNavController.navigate(Screen.CreateTicket)
+                            },
+                            onOpenTicket = { ticketId ->
+                                tabNavController.navigate(Screen.TicketDetail(ticketId = ticketId))
+                            },
+                        )
                     }
                 }
 

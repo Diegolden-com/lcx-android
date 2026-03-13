@@ -46,6 +46,7 @@ Estados de trabajo usados por este gate:
 - Flujo de charge + print + transaction orchestration.
 - Caja como tab funcional con registrar + historial.
 - Agua conectada al feature real, con scoping por `profile.branch` y persistencia de `recorded_by` / `branch`.
+- Dashboard operador nativo con quick actions reales, rutina operativa del dia y agregados minimos de tickets pendientes + suministros.
 - More hub y role guards operator/manager.
 
 ### 3.2 Existe en codigo pero no esta conectado al producto real
@@ -65,7 +66,7 @@ Estados de trabajo usados por este gate:
 
 ### 3.4 Placeholder directo
 
-- Dashboard operador.
+- Ninguno relevante en este corte.
 
 ### 3.5 Ausente
 
@@ -120,7 +121,7 @@ Objetivo: un operador puede abrir, operar y cerrar turno completo sin fallback a
 
 ### G1.1 Dashboard operador
 
-Estado actual: `MISSING` (placeholder)
+Estado actual: `PARTIAL`
 
 PWA refs:
 
@@ -138,6 +139,17 @@ Evidence minima:
 
 - `./gradlew :app:assembleDevDebug`
 - smoke manual con data real o fixture que muestre quick actions y tarjetas vivas
+
+Estado al 2026-03-13:
+
+- `Screen.Dashboard` ya no usa placeholder; monta un dashboard nativo con quick actions reales hacia Checklist, Agua, Caja y Nuevo encargo,
+- agrega rutina operativa con estado de checklist entrada/salida, agua y caja sobre datos reales del backend,
+- agrega pendientes operativos minimos con tickets abiertos y suministros bajos sin inventar metricas nuevas.
+
+Residual exacto para flippear a `DONE`:
+
+- falta smoke manual real del dashboard con una sesion de operador valida que confirme quick actions y tarjetas vivas con datos del entorno,
+- el emulador local ya compila, instala y abre Login, pero el workspace actual no incluye credenciales o fixture de QA para autenticarse y recorrer el flujo post-login.
 
 ### G1.2 Agua
 
@@ -257,6 +269,7 @@ Estado al 2026-03-13:
 Residual exacto para flippear a `DONE`:
 
 - falta smoke manual real `agua -> caja -> checklist entrada -> checklist salida` para validar el loop completo con datos del entorno,
+- el bloqueo vigente no es de Android base: el emulador local ya compila, instala y abre Login, pero el workspace actual no incluye credenciales o fixture de QA para autenticarse y ejecutar el loop post-login,
 - el historial sigue en modo minimo; filtros/stats quedan fuera de G1 pero aun no tienen smoke manual que cierre parity operacional completa.
 
 ### G1.5 Encargos nuevo
@@ -393,7 +406,8 @@ Estado al 2026-03-13:
 Residual exacto para flippear a `DONE`:
 
 - falta smoke manual en Android con una venta mixta real: cliente anonimo o seleccionado, equipo + producto, y validacion final de los tickets generados,
-- falta smoke manual especifico del path tarjeta para confirmar UX/operacion con la terminal disponible del entorno.
+- falta smoke manual especifico del path tarjeta para confirmar UX/operacion con la terminal disponible del entorno,
+- el bloqueo vigente no es de build/device: el emulador local ya compila, instala y abre Login, pero el workspace actual no incluye credenciales o fixture de QA para autenticarse y ejecutar la venta real.
 
 ### G1.9 Role access completo de operador
 

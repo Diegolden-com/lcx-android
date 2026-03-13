@@ -44,6 +44,16 @@ class ChecklistRepository @Inject constructor(
         }
     }
 
+    suspend fun getTodayChecklistSnapshot(type: ChecklistType): Result<Checklist?> {
+        val today = LocalDate.now().toString()
+        return runCatching {
+            selectChecklistByField("checklist_type", type.serializedValue(), today).getOrThrow()
+                ?: selectChecklistByField("notes", type.serializedValue(), today).getOrThrow()
+        }.onFailure { error ->
+            Timber.e(error, "getTodayChecklistSnapshot(%s) failed", type)
+        }
+    }
+
     suspend fun updateChecklistItem(
         itemId: String,
         completed: Boolean,

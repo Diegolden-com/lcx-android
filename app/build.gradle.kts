@@ -183,6 +183,7 @@ dependencies {
 
     // Serialization
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.supabase.postgrest)
 
     // Coroutines
     implementation(libs.kotlinx.coroutines)
