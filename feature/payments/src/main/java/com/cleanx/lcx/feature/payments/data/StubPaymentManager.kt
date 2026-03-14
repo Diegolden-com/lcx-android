@@ -67,6 +67,15 @@ class StubPaymentManager @Inject constructor() : PaymentManager {
 
     override fun isInitialized(): Boolean = initialized
 
+    override fun capability(): PaymentCapability = PaymentCapability(
+        backendType = PaymentBackendType.STUB,
+        backendLabel = "Stub (simulado)",
+        canAcceptPayments = true,
+        isInitialized = initialized,
+        statusMessage = "No cobra una terminal real; usalo solo para smoke funcional del flujo.",
+        currentScenario = scenario.name,
+    )
+
     override suspend fun requestPayment(amount: Double, reference: String): PaymentResult {
         Timber.d("[STUB-ZETTLE] requestPayment amount=%.2f ref=%s scenario=%s", amount, reference, scenario)
 

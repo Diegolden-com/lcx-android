@@ -81,6 +81,17 @@ class SalesCheckoutUseCase @Inject constructor(
         total: Double,
         correlationId: String,
     ): SalesCheckoutResult {
+        val capability = paymentManager.capability()
+        if (!capability.canAcceptPayments) {
+            return SalesCheckoutResult.PaymentFailed(capability.statusMessage)
+        }
+        if (!capability.isInitialized) {
+            return SalesCheckoutResult.PaymentFailed(
+                "El backend de pagos ${capability.backendLabel} aun no esta inicializado. " +
+                    "Reabre la app e intenta de nuevo.",
+            )
+        }
+
         val paymentResult = runCatching {
             paymentManager.requestPayment(
                 amount = total,

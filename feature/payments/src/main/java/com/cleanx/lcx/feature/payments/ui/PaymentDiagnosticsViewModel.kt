@@ -2,8 +2,8 @@ package com.cleanx.lcx.feature.payments.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.cleanx.lcx.core.config.FeatureFlags
 import com.cleanx.lcx.feature.payments.data.PaymentManager
+import com.cleanx.lcx.feature.payments.data.PaymentBackendType
 import com.cleanx.lcx.feature.payments.data.PaymentResult
 import com.cleanx.lcx.feature.payments.data.SimulatedScenario
 import com.cleanx.lcx.feature.payments.data.StubPaymentManager
@@ -17,9 +17,12 @@ import timber.log.Timber
 import javax.inject.Inject
 
 data class DiagnosticsUiState(
-    val useRealZettle: Boolean = false,
+    val backendLabel: String = "",
+    val backendStatusMessage: String = "",
+    val backendType: PaymentBackendType = PaymentBackendType.STUB,
+    val canAcceptPayments: Boolean = false,
     val isInitialized: Boolean = false,
-    val currentScenario: String = "Random",
+    val currentScenario: String? = null,
     val isProcessing: Boolean = false,
     val lastResult: String? = null,
 )
@@ -27,15 +30,10 @@ data class DiagnosticsUiState(
 @HiltViewModel
 class PaymentDiagnosticsViewModel @Inject constructor(
     private val paymentManager: PaymentManager,
-    private val featureFlags: FeatureFlags,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
-        DiagnosticsUiState(
-            useRealZettle = featureFlags.useRealZettle,
-            isInitialized = paymentManager.isInitialized(),
-            currentScenario = currentScenarioName(),
-        ),
+        paymentManager.capability().toUiState(),
     )
     val uiState: StateFlow<DiagnosticsUiState> = _uiState.asStateFlow()
 
@@ -49,11 +47,22 @@ class PaymentDiagnosticsViewModel @Inject constructor(
         }
         stub.scenario = scenario
         Timber.d("[DIAG] Scenario changed to %s", scenario)
-        _uiState.update { it.copy(currentScenario = scenario.name) }
+        refreshCapability()
     }
 
     fun triggerTestPayment() {
         if (_uiState.value.isProcessing) return
+        val capability = paymentManager.capability()
+        if (!capability.canAcceptPayments) {
+            refreshCapability(lastResult = "No disponible: ${capability.statusMessage}")
+            return
+        }
+        if (!capability.isInitialized) {
+            refreshCapability(
+                lastResult = "No inicializado: ${capability.backendLabel}. Reabre la app e intenta de nuevo.",
+            )
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(isProcessing = true, lastResult = null) }
             try {
@@ -69,27 +78,34 @@ class PaymentDiagnosticsViewModel @Inject constructor(
                     is PaymentResult.Failed ->
                         "Error: ${result.errorCode} — ${result.message}"
                 }
-                _uiState.update {
-                    it.copy(
-                        isProcessing = false,
-                        lastResult = display,
-                        isInitialized = paymentManager.isInitialized(),
-                    )
-                }
+                refreshCapability(lastResult = display)
             } catch (e: Exception) {
                 Timber.e(e, "[DIAG] Test payment threw exception")
-                _uiState.update {
-                    it.copy(
-                        isProcessing = false,
-                        lastResult = "Excepcion: ${e.message}",
-                    )
-                }
+                refreshCapability(lastResult = "Excepcion: ${e.message}")
             }
         }
     }
 
-    private fun currentScenarioName(): String {
-        val stub = paymentManager as? StubPaymentManager
-        return stub?.scenario?.name ?: "N/A (SDK real)"
+    private fun refreshCapability(lastResult: String? = _uiState.value.lastResult) {
+        _uiState.update {
+            paymentManager.capability().toUiState(
+                isProcessing = false,
+                lastResult = lastResult,
+            )
+        }
     }
 }
+
+private fun com.cleanx.lcx.feature.payments.data.PaymentCapability.toUiState(
+    isProcessing: Boolean = false,
+    lastResult: String? = null,
+): DiagnosticsUiState = DiagnosticsUiState(
+    backendLabel = backendLabel,
+    backendStatusMessage = statusMessage,
+    backendType = backendType,
+    canAcceptPayments = canAcceptPayments,
+    isInitialized = isInitialized,
+    currentScenario = currentScenario,
+    isProcessing = isProcessing,
+    lastResult = lastResult,
+)

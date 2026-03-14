@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.cleanx.lcx.feature.payments.data.PaymentBackendType
 
 /**
  * Debug-only diagnostics screen for the payment subsystem.
@@ -66,26 +67,39 @@ fun PaymentDiagnosticsScreen(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "Modo actual",
+                    text = "Backend actual",
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = if (state.useRealZettle) "SDK Real (Zettle)" else "Stub (simulado)",
+                    text = state.backendLabel,
                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                    color = if (state.useRealZettle)
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.tertiary,
+                    color = when {
+                        !state.canAcceptPayments -> MaterialTheme.colorScheme.error
+                        state.backendType == PaymentBackendType.STUB -> MaterialTheme.colorScheme.tertiary
+                        else -> MaterialTheme.colorScheme.primary
+                    },
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Escenario: ${state.currentScenario}",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text(
                     text = "Inicializado: ${if (state.isInitialized) "Si" else "No"}",
                     style = MaterialTheme.typography.bodyMedium,
+                )
+                state.currentScenario?.let { scenario ->
+                    Text(
+                        text = "Escenario: $scenario",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = state.backendStatusMessage,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (state.canAcceptPayments) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
                 )
             }
         }
@@ -93,7 +107,7 @@ fun PaymentDiagnosticsScreen(
         Spacer(Modifier.height(16.dp))
 
         // -- Scenario buttons (only meaningful in stub mode) --
-        if (!state.useRealZettle) {
+        if (state.backendType == PaymentBackendType.STUB) {
             Text(
                 text = "Escenario simulado",
                 style = MaterialTheme.typography.titleMedium,
@@ -150,7 +164,7 @@ fun PaymentDiagnosticsScreen(
         Button(
             onClick = { viewModel.triggerTestPayment() },
             modifier = Modifier.fillMaxWidth(),
-            enabled = !state.isProcessing,
+            enabled = !state.isProcessing && state.canAcceptPayments && state.isInitialized,
         ) {
             if (state.isProcessing) {
                 CircularProgressIndicator(
@@ -163,6 +177,19 @@ fun PaymentDiagnosticsScreen(
             Text("Cobrar $1.00 de prueba")
         }
 
+        if (!state.canAcceptPayments || !state.isInitialized) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = if (!state.canAcceptPayments) {
+                    "Este build no puede procesar tarjeta real todavia."
+                } else {
+                    "El backend aun no se inicializa; reabre la app antes del smoke."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
         // -- Last result --
         if (state.lastResult != null) {
             Spacer(Modifier.height(16.dp))
@@ -172,6 +199,8 @@ fun PaymentDiagnosticsScreen(
                     containerColor = when {
                         state.lastResult.startsWith("Exito") -> MaterialTheme.colorScheme.secondaryContainer
                         state.lastResult.startsWith("Cancelado") -> MaterialTheme.colorScheme.surfaceVariant
+                        state.lastResult.startsWith("No disponible") -> MaterialTheme.colorScheme.errorContainer
+                        state.lastResult.startsWith("No inicializado") -> MaterialTheme.colorScheme.errorContainer
                         else -> MaterialTheme.colorScheme.errorContainer
                     },
                 ),

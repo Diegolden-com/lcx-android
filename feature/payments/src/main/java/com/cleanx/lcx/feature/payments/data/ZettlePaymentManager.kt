@@ -96,6 +96,16 @@ class ZettlePaymentManager : PaymentManager {
 
     override fun isInitialized(): Boolean = false
 
+    override fun capability(): PaymentCapability = PaymentCapability(
+        backendType = PaymentBackendType.ZETTLE_REAL,
+        backendLabel = "SDK real no integrado",
+        canAcceptPayments = false,
+        isInitialized = false,
+        statusMessage =
+            "ZettlePaymentManager aun es un placeholder. Falta cablear el SDK real, " +
+                "OAuth/callback y credenciales del portal de Zettle.",
+    )
+
     override suspend fun requestPayment(amount: Double, reference: String): PaymentResult {
         // TODO: replace with real CardReaderAction.Payment flow (see KDoc above)
         throw UnsupportedOperationException(

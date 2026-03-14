@@ -414,13 +414,15 @@ Estado al 2026-03-13:
 - soporta carrito mixto con equipo + add-ons + inventario vendible en la misma venta,
 - arma tickets `source=venta` equivalentes al PWA: un ticket por equipo y un ticket consolidado `Venta Productos` para productos/inventario,
 - pago nativo: efectivo/transfer persisten directo como `paid`; tarjeta cobra primero en la terminal nativa y luego crea el batch `venta`,
-- si tarjeta cobra pero `POST /api/tickets` falla, la UI deja estado critico con `transactionId` y `correlationId` para conciliacion manual en vez de reintentar a ciegas y duplicar ventas.
+- si tarjeta cobra pero `POST /api/tickets` falla, la UI deja estado critico con `transactionId` y `correlationId` para conciliacion manual en vez de reintentar a ciegas y duplicar ventas,
+- el wiring de pagos ya no rompe por flavor cuando `USE_REAL_ZETTLE=true`: Android ahora expone un backend `SDK real no integrado` explicito, inicializa el backend al arrancar y falla con mensaje operativo claro en vez de crash de DI.
 
 Residual exacto para flippear a `DONE`:
 
 - falta smoke manual en Android con una venta mixta real: cliente anonimo o seleccionado, equipo + producto, y validacion final de los tickets generados,
 - falta smoke manual especifico del path tarjeta para confirmar UX/operacion con la terminal disponible del entorno,
-- el bloqueo vigente no es de build/device: el emulador local ya compila, instala y abre Login, pero el workspace actual no incluye credenciales o fixture de QA para autenticarse y ejecutar la venta real.
+- el bloqueo vigente del path tarjeta ya no es ambiguo: este workspace no integra el SDK real de Zettle en Android y tampoco incluye credenciales/fixture QA para autenticarse y ejecutar la venta real post-login,
+- antes del smoke de tarjeta siguen faltando como minimo dependencias Android SDK de Zettle, wiring OAuth/callback y credenciales validas del portal de Zettle para este app/build.
 
 ### G1.9 Role access completo de operador
 

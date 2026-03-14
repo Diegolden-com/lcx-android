@@ -5,6 +5,8 @@ import com.cleanx.lcx.core.model.PaymentStatus
 import com.cleanx.lcx.core.model.ServiceType
 import com.cleanx.lcx.core.model.Ticket
 import com.cleanx.lcx.core.model.TicketStatus
+import com.cleanx.lcx.feature.payments.data.PaymentBackendType
+import com.cleanx.lcx.feature.payments.data.PaymentCapability
 import com.cleanx.lcx.feature.payments.data.PaymentManager
 import com.cleanx.lcx.feature.payments.data.PaymentResult
 import com.cleanx.lcx.feature.tickets.data.ApiResult
@@ -31,6 +33,7 @@ class SalesCheckoutUseCaseTest {
 
     @Test
     fun `cash checkout creates venta batch without card charge`() = runTest {
+        every { paymentManager.capability() } returns unavailableCapability()
         coEvery { ticketRepository.createTickets(any(), any()) } returns ApiResult.Success(
             listOf(ticket()),
         )
@@ -47,7 +50,7 @@ class SalesCheckoutUseCaseTest {
 
     @Test
     fun `card checkout charges total before creating venta tickets`() = runTest {
-        every { paymentManager.isInitialized() } returns true
+        every { paymentManager.capability() } returns readyCardCapability()
         coEvery { paymentManager.requestPayment(74.0, any()) } returns PaymentResult.Success(
             transactionId = "txn-123",
             amount = 74.0,
@@ -70,7 +73,7 @@ class SalesCheckoutUseCaseTest {
 
     @Test
     fun `card checkout surfaces critical failure when charge succeeds but venta create fails`() = runTest {
-        every { paymentManager.isInitialized() } returns true
+        every { paymentManager.capability() } returns readyCardCapability()
         coEvery { paymentManager.requestPayment(74.0, any()) } returns PaymentResult.Success(
             transactionId = "txn-123",
             amount = 74.0,
@@ -96,6 +99,26 @@ class SalesCheckoutUseCaseTest {
             "Debes completar el checklist de apertura antes de crear tickets.",
             failure.message,
         )
+    }
+
+    @Test
+    fun `card checkout fails fast when real backend is unavailable`() = runTest {
+        every { paymentManager.capability() } returns unavailableCapability()
+
+        val result = useCase(
+            request = checkoutRequest(paymentMethod = PaymentMethod.CARD),
+            now = Instant.parse("2026-03-13T12:00:00Z"),
+        )
+
+        assertTrue(result is SalesCheckoutResult.PaymentFailed)
+        assertEquals(
+            "USE_REAL_ZETTLE=true, pero Android aun no integra el SDK real de Zettle. " +
+                "Faltan dependencias del SDK, OAuth/callback y credenciales validas; " +
+                "tarjeta real no disponible en este build.",
+            (result as SalesCheckoutResult.PaymentFailed).message,
+        )
+        coVerify(exactly = 0) { paymentManager.requestPayment(any(), any()) }
+        coVerify(exactly = 0) { ticketRepository.createTickets(any(), any()) }
     }
 
     private fun checkoutRequest(paymentMethod: PaymentMethod): SalesCheckoutRequest {
@@ -136,6 +159,26 @@ class SalesCheckoutUseCaseTest {
             paymentMethod = paymentMethod,
         )
     }
+
+    private fun readyCardCapability() = PaymentCapability(
+        backendType = PaymentBackendType.STUB,
+        backendLabel = "Stub (simulado)",
+        canAcceptPayments = true,
+        isInitialized = true,
+        statusMessage = "Smoke funcional habilitado.",
+        currentScenario = "AlwaysSuccess",
+    )
+
+    private fun unavailableCapability() = PaymentCapability(
+        backendType = PaymentBackendType.ZETTLE_REAL,
+        backendLabel = "SDK real no integrado",
+        canAcceptPayments = false,
+        isInitialized = false,
+        statusMessage =
+            "USE_REAL_ZETTLE=true, pero Android aun no integra el SDK real de Zettle. " +
+                "Faltan dependencias del SDK, OAuth/callback y credenciales validas; " +
+                "tarjeta real no disponible en este build.",
+    )
 
     private fun ticket(): Ticket {
         return Ticket(

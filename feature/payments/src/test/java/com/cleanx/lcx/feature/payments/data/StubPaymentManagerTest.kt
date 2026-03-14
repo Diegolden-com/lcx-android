@@ -105,6 +105,18 @@ class StubPaymentManagerTest {
         assertTrue(stub.isInitialized())
     }
 
+    @Test
+    fun `capability reflects stub backend and current scenario`() {
+        stub.scenario = SimulatedScenario.AlwaysFailed
+
+        val capability = stub.capability()
+
+        assertEquals(PaymentBackendType.STUB, capability.backendType)
+        assertEquals("Stub (simulado)", capability.backendLabel)
+        assertEquals("AlwaysFailed", capability.currentScenario)
+        assertTrue(capability.canAcceptPayments)
+    }
+
     // -- Helper --
     private fun mockContext(): android.content.Context {
         return io.mockk.mockk(relaxed = true)

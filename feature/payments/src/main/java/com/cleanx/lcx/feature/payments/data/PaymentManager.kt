@@ -2,6 +2,20 @@ package com.cleanx.lcx.feature.payments.data
 
 import android.content.Context
 
+enum class PaymentBackendType {
+    STUB,
+    ZETTLE_REAL,
+}
+
+data class PaymentCapability(
+    val backendType: PaymentBackendType,
+    val backendLabel: String,
+    val canAcceptPayments: Boolean,
+    val isInitialized: Boolean,
+    val statusMessage: String,
+    val currentScenario: String? = null,
+)
+
 /**
  * Abstraction over a card-payment SDK (currently PayPal Zettle).
  *
@@ -19,6 +33,9 @@ interface PaymentManager {
 
     /** `true` after [initialize] completes successfully. */
     fun isInitialized(): Boolean
+
+    /** Describes which payment backend is active and whether it can really charge. */
+    fun capability(): PaymentCapability
 
     /**
      * Launch the card reader flow for the given [amount] (in the merchant's
